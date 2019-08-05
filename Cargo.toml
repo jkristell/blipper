@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 stm32f1xx-hal = { version = "0.3", features = ["rt", "stm32f103" ] }
 cortex-m = "0.5"
 cortex-m-rt = { version = "0.6.10", features = ["device"] }
-panic-halt = "*"
+panic-halt = "0.2"
 stm32-usbd = { version = "0.3.0", features = ["stm32f103xx"] }
 usb-device = "0.2.0"
 cortex-m-rtfm = "0.4.3"
