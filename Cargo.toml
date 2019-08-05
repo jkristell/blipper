@@ -1,0 +1,28 @@
+[package]
+name = "blipper"
+version = "0.1.0"
+authors = ["Johan Kristell <johan@jott.se>"]
+edition = "2018"
+
+[dependencies]
+stm32f1xx-hal = { version = "0.3", features = ["rt", "stm32f103" ] }
+cortex-m = "0.5"
+cortex-m-rt = { version = "0.6.10", features = ["device"] }
+panic-halt = "*"
+stm32-usbd = { version = "0.3.0", features = ["stm32f103xx"] }
+usb-device = "0.2.0"
+cortex-m-rtfm = "0.4.3"
+cortex-m-semihosting = "0.3.2"
+embedded-hal = "0.2.3"
+infrared = "0.3.0"
+
+[profile.dev]
+opt-level = 1
+lto = true
+incremental = false
+
+[profile.release]
+lto = true
+incremental = false
+opt-level = "z"
+debug = true
