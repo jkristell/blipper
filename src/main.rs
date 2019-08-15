@@ -131,6 +131,13 @@ const APP: () = {
         *TS = TS.wrapping_add(1);
     }
 
+    #[task(
+        resources = [RESQ, USB_DEV, SERIAL]
+    )]
+    fn send_trace() {
+        //hprintln!("bar").unwrap();
+    }
+
     #[interrupt(resources = [USB_DEV, SERIAL])]
     fn USB_HP_CAN_TX() {
         usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL);
@@ -140,7 +147,9 @@ const APP: () = {
     fn USB_LP_CAN_RX0() {
         usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL);
     }
-
+    extern "C" {
+        fn USART1();
+    }
 };
 
 
@@ -168,6 +177,15 @@ fn usb_poll<B: bus::UsbBus>(
         _ => {}
     }
 }
+
+fn usb_write<B: bus::UsbBus>(
+    usb_dev: &mut UsbDevice<'static, B>,
+    serial: &mut SerialPort<'static, B>,
+    towrite: &[u8],
+) {
+    serial.write(towrite).ok();
+}
+
 
 fn u32_to_buf(mut num: u32, buf: &mut [u8; 10]) -> usize {
 
