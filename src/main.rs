@@ -25,7 +25,7 @@ use heapless::{
 };
 
 
-use infrared::{nec::{NecType, NecReceiver}, Receiver, trace, ReceiverState};
+use infrared::{Receiver, ReceiverState};
 use infrared::trace::{TraceReceiver, TraceResult};
 
 #[app(device = stm32f1xx_hal::stm32)]
@@ -107,6 +107,7 @@ const APP: () = {
     #[interrupt(
         priority = 2,
         resources = [TIMER_MS, RECEIVER, IRPIN, RESQ],
+        spawn = [send_trace],
     )]
     fn TIM4() {
         // Sample num
@@ -121,8 +122,10 @@ const APP: () = {
         match state {
             ReceiverState::Done(res) => {
                 //TODO: Queue this in the Command queue
-                let (mut producer, _consumer) = resources.RESQ.split();
-                producer.enqueue(res).unwrap();
+                //let (mut producer, _consumer) = resources.RESQ.split();
+                //producer.enqueue(res).unwrap();
+
+                spawn.send_trace(res).unwrap();
             },
             _ => (),
         }
@@ -132,9 +135,20 @@ const APP: () = {
     }
 
     #[task(
-        resources = [RESQ, USB_DEV, SERIAL]
+        priority = 1,
+        resources = [RESQ, USB_DEV, SERIAL],
     )]
-    fn send_trace() {
+    fn send_trace(res: TraceResult) {
+
+        //let (_prod, mut consumer) = resources.RESQ.split();
+
+        for n in &res.buf {
+            let mut sb = [b' '; 11];
+            let s = u32_to_buf(*n, &mut sb[0..10]);
+            usb_write(&mut resources.SERIAL, &sb[s..]);
+        }
+        //usb_write(&mut resources.SERIAL, &[]);
+
         //hprintln!("bar").unwrap();
     }
 
@@ -147,6 +161,8 @@ const APP: () = {
     fn USB_LP_CAN_RX0() {
         usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL);
     }
+
+    // Interrupt used by the tasks
     extern "C" {
         fn USART1();
     }
@@ -179,7 +195,6 @@ fn usb_poll<B: bus::UsbBus>(
 }
 
 fn usb_write<B: bus::UsbBus>(
-    usb_dev: &mut UsbDevice<'static, B>,
     serial: &mut SerialPort<'static, B>,
     towrite: &[u8],
 ) {
@@ -187,7 +202,7 @@ fn usb_write<B: bus::UsbBus>(
 }
 
 
-fn u32_to_buf(mut num: u32, buf: &mut [u8; 10]) -> usize {
+fn u32_to_buf(mut num: u32, buf: &mut [u8]) -> usize {
 
     let mut i = buf.len() - 1;
 
