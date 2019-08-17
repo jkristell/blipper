@@ -2,7 +2,7 @@
 #![no_std]
 #![allow(deprecated)]
 
-use panic_halt as _;
+use panic_semihosting as _;
 use cortex_m::asm::delay;
 use cortex_m_semihosting::hprintln;
 use rtfm::app;
@@ -10,8 +10,8 @@ use rtfm::app;
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     prelude::*,
-    stm32::{TIM2},
     timer::{self, Timer},
+    device,
 };
 
 
@@ -35,7 +35,7 @@ const APP: () = {
     static mut USB_DEV: UsbDevice<'static, UsbBusType> = ();
     static mut SERIAL: SerialPort<'static, UsbBusType> = ();
 
-    static mut TIMER_MS: Timer<TIM2> = ();
+    static mut TIMER_MS: Timer<device::TIM2> = ();
     static mut RECEIVER: TraceReceiver = ();
     static mut IRPIN: PB8<Input<Floating>> = ();
 
@@ -120,7 +120,7 @@ const APP: () = {
 
         loop {
             while let Some(tr) = resources.CONS.dequeue() {
-                hprintln!("r: {:?}", tr).unwrap();
+                //hprintln!("r: {:?}", tr).unwrap();
 
                 spawn.send_trace(tr).unwrap();
             }
@@ -131,7 +131,7 @@ const APP: () = {
         priority = 2,
         resources = [TIMER_MS, RECEIVER, IRPIN, PROD],
     )]
-    fn TIM4() {
+    fn TIM2() {
         // Sample num
         static mut TS: u32 = 0;
         // Active low
@@ -144,7 +144,10 @@ const APP: () = {
         match state {
             ReceiverState::Done(res) => {
                 resources.PROD.enqueue(res).unwrap();
-            },
+                resources.RECEIVER.reset();
+            }
+            ReceiverState::Receiving => {
+            }
             _ => (),
         }
 
@@ -166,7 +169,7 @@ const APP: () = {
             usb_write(&mut resources.SERIAL, &sb[s..]);
         }
 
-        usb_write(&mut resources.SERIAL, b"\n");
+        usb_write(&mut resources.SERIAL, b"\r\n");
     }
 
     #[interrupt(resources = [USB_DEV, SERIAL])]
