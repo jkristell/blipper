@@ -4,6 +4,7 @@
 
 use panic_halt as _;
 use cortex_m::asm::delay;
+use cortex_m_semihosting::hprintln;
 use rtfm::app;
 
 use stm32f1xx_hal::{
@@ -20,13 +21,13 @@ use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use heapless::{
-    spsc::Queue,
+    spsc::{self, Producer, Consumer},
     consts::U8,
 };
 
-
 use infrared::{Receiver, ReceiverState};
 use infrared::trace::{TraceReceiver, TraceResult};
+
 
 #[app(device = stm32f1xx_hal::stm32)]
 const APP: () = {
@@ -38,7 +39,9 @@ const APP: () = {
     static mut RECEIVER: TraceReceiver = ();
     static mut IRPIN: PB8<Input<Floating>> = ();
 
-    static mut RESQ: Queue<TraceResult, U8> = ();
+    //static mut RESQ: Queue<TraceResult, U8> = ();
+    static mut PROD: Producer<'static, TraceResult, U8> = ();
+    static mut CONS: Consumer<'static, TraceResult, U8> = ();
 
     #[init]
     fn init() -> init::LateResources {
@@ -94,8 +97,13 @@ const APP: () = {
         // Setup the receiver
         let receiver = TraceReceiver::new(20_000);
 
+        static mut QUEUE: spsc::Queue<TraceResult, U8> = spsc::Queue(heapless::i::Queue::new());
+        let (prod, cons) = unsafe{QUEUE.split()};
+
         init::LateResources {
-            RESQ: Queue::new(),
+            PROD: prod,
+            CONS: cons,
+
             TIMER_MS: timer_ms,
             RECEIVER: receiver,
             IRPIN: irpin,
@@ -104,10 +112,24 @@ const APP: () = {
         }
     }
 
+    #[idle(
+        resources = [CONS],
+        spawn = [send_trace],
+    )]
+    fn idle() -> ! {
+
+        loop {
+            while let Some(tr) = resources.CONS.dequeue() {
+                hprintln!("r: {:?}", tr).unwrap();
+
+                spawn.send_trace(tr).unwrap();
+            }
+        }
+    }
+
     #[interrupt(
         priority = 2,
-        resources = [TIMER_MS, RECEIVER, IRPIN, RESQ],
-        spawn = [send_trace],
+        resources = [TIMER_MS, RECEIVER, IRPIN, PROD],
     )]
     fn TIM4() {
         // Sample num
@@ -121,11 +143,7 @@ const APP: () = {
 
         match state {
             ReceiverState::Done(res) => {
-                //TODO: Queue this in the Command queue
-                //let (mut producer, _consumer) = resources.RESQ.split();
-                //producer.enqueue(res).unwrap();
-
-                spawn.send_trace(res).unwrap();
+                resources.PROD.enqueue(res).unwrap();
             },
             _ => (),
         }
@@ -136,20 +154,19 @@ const APP: () = {
 
     #[task(
         priority = 1,
-        resources = [RESQ, USB_DEV, SERIAL],
+        resources = [USB_DEV, SERIAL],
     )]
     fn send_trace(res: TraceResult) {
 
-        //let (_prod, mut consumer) = resources.RESQ.split();
+        usb_write(&mut resources.SERIAL, b"DATA ");
 
         for n in &res.buf {
             let mut sb = [b' '; 11];
             let s = u32_to_buf(*n, &mut sb[0..10]);
             usb_write(&mut resources.SERIAL, &sb[s..]);
         }
-        //usb_write(&mut resources.SERIAL, &[]);
 
-        //hprintln!("bar").unwrap();
+        usb_write(&mut resources.SERIAL, b"\n");
     }
 
     #[interrupt(resources = [USB_DEV, SERIAL])]
@@ -201,18 +218,25 @@ fn usb_write<B: bus::UsbBus>(
     serial.write(towrite).ok();
 }
 
-
 fn u32_to_buf(mut num: u32, buf: &mut [u8]) -> usize {
 
     let mut i = buf.len() - 1;
 
-    while num != 0 {
-        let next = num % 10;
-        buf[i] = b'0' + (next as u8);
+    if num == 0 {
+        buf[i] = b'0';
+    } else {
+        loop {
+            let last = num % 10;
+            buf[i] = b'0' + (last as u8);
 
-        i -= 1;
-        num /= 10;
+            num /= 10;
+            if num == 0 {
+                break
+            }
+            i -= 1;
+        }
     }
 
     i
 }
+
