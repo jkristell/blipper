@@ -122,7 +122,7 @@ const APP: () = {
             while let Some(tr) = resources.CONS.dequeue() {
                 //hprintln!("r: {:?}", tr).unwrap();
 
-                spawn.send_trace(tr).unwrap();
+                let _ = spawn.send_trace(tr);
             }
         }
     }
@@ -143,7 +143,7 @@ const APP: () = {
 
         match state {
             ReceiverState::Done(res) => {
-                resources.PROD.enqueue(res).unwrap();
+                let _ = resources.PROD.enqueue(res);
                 resources.RECEIVER.reset();
             }
             ReceiverState::Receiving => {
@@ -163,9 +163,9 @@ const APP: () = {
 
         usb_write(&mut resources.SERIAL, b"DATA ");
 
-        for n in &res.buf {
+        for i in 0..res.buf_len {
             let mut sb = [b' '; 11];
-            let s = u32_to_buf(*n, &mut sb[0..10]);
+            let s = u32_to_buf(res.buf[i], &mut sb[0..10]);
             usb_write(&mut resources.SERIAL, &sb[s..]);
         }
 
