@@ -28,6 +28,8 @@ use heapless::{
 use infrared::{Receiver, ReceiverState};
 use infrared::trace::{TraceReceiver, TraceResult};
 
+const SAMPLERATE: u32 = 40_000;
+
 
 #[app(device = stm32f1xx_hal::stm32)]
 const APP: () = {
@@ -84,7 +86,7 @@ const APP: () = {
 
         // Setup the Timer
         let mut timer_ms = Timer::tim2(device.TIM2,
-                                       20.khz(),
+                                       SAMPLERATE.hz(),
                                        clocks,
                                        &mut rcc.apb1);
 
@@ -95,7 +97,7 @@ const APP: () = {
         let irpin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
 
         // Setup the receiver
-        let receiver = TraceReceiver::new(20_000);
+        let receiver = TraceReceiver::new(SAMPLERATE);
 
         static mut QUEUE: spsc::Queue<TraceResult, U8> = spsc::Queue(heapless::i::Queue::new());
         let (prod, cons) = unsafe{QUEUE.split()};
