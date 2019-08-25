@@ -79,7 +79,7 @@ const APP: () = {
         let usb_dev =
             UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x16c0, 0x27dd))
                 .manufacturer("Fake company")
-                .product("Serial port")
+                .product("Blipper")
                 .serial_number("TEST")
                 .device_class(USB_CLASS_CDC)
                 .build();
@@ -100,7 +100,7 @@ const APP: () = {
         let receiver = TraceReceiver::new(SAMPLERATE);
 
         static mut QUEUE: spsc::Queue<TraceResult, U8> = spsc::Queue(heapless::i::Queue::new());
-        let (prod, cons) = unsafe{QUEUE.split()};
+        let (prod, cons) = unsafe {QUEUE.split()};
 
         init::LateResources {
             PROD: prod,
@@ -122,8 +122,6 @@ const APP: () = {
 
         loop {
             while let Some(tr) = resources.CONS.dequeue() {
-                //hprintln!("r: {:?}", tr).unwrap();
-
                 let _ = spawn.send_trace(tr);
             }
         }
