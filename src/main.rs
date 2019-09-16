@@ -7,6 +7,8 @@ use cortex_m::asm::delay;
 use cortex_m_semihosting::hprintln;
 use rtfm::app;
 
+use embedded_hal::digital::v2::{InputPin, OutputPin};
+
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     prelude::*,
@@ -66,7 +68,7 @@ const APP: () = {
         // BluePill board has a pull-up resistor on the D+ line.
         // Pull the D+ pin down to send a RESET condition to the USB bus.
         let mut usb_dp = gpioa.pa12.into_push_pull_output(&mut gpioa.crh);
-        usb_dp.set_low();
+        usb_dp.set_low().unwrap();
         delay(clocks.sysclk().0 / 100);
 
         let usb_dm = gpioa.pa11;
@@ -135,7 +137,7 @@ const APP: () = {
         // Sample num
         static mut TS: u32 = 0;
         // Active low
-        let rising = resources.IRPIN.is_low();
+        let rising = resources.IRPIN.is_low().unwrap();
         // Ack the timer interrupt
         resources.TIMER_MS.clear_update_interrupt_flag();
         // Step the receivers state machine
