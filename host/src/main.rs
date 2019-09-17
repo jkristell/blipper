@@ -51,6 +51,7 @@ enum Command {
     Playback {
         path: Option<PathBuf>,
     },
+    Postcard {}
 }
 
 
@@ -99,6 +100,26 @@ fn write_vcd(vcdwriter: &mut BlipperVcd, bytes: &[u8]) -> io::Result<()> {
     }
 
     vcdwriter.add_offset(v.last().unwrap_or(&0) + 200);
+
+    Ok(())
+}
+
+fn command_postcard(devpath: &PathBuf) -> io::Result<()> {
+    use common;
+    use heapless::{
+        consts::{U64},
+    };
+
+    use postcard::to_vec;
+    //let mut port = serial_connect(devpath).expect("Failed to open serial");
+
+    let cmd_send = common::Command::Idle;
+
+    let req: heapless::Vec<u8, U64> = to_vec(&cmd_send).unwrap();
+
+    println!("{:?}", req);
+
+    //port.write_all(&req).unwrap();
 
     Ok(())
 }
@@ -166,11 +187,14 @@ fn main() -> io::Result<()> {
             let path = path.unwrap_or(PathBuf::from("philips-bluray.vcd"));
             play_saved_vcd(&path, opt.debug)
         }
+        Command::Postcard {} => {
+            command_postcard(&devpath)
+        }
     }
 }
 
 fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
-    use infrared::{Receiver, ReceiverState, philips::Rc6Receiver};
+    use infrared::{Receiver, ReceiverState, rc6::Rc6Receiver};
 
     let mut recv = Rc6Receiver::new(40_000);
 

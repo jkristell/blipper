@@ -24,11 +24,16 @@ use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use heapless::{
     spsc::{self, Producer, Consumer},
-    consts::U8,
+    consts::{U8, U64},
+    Vec,
 };
+
+use postcard::from_bytes;
 
 use infrared::{Receiver, ReceiverState};
 use infrared::trace::{TraceReceiver, TraceResult};
+
+use common;
 
 const SAMPLERATE: u32 = 40_000;
 
@@ -46,6 +51,8 @@ const APP: () = {
     //static mut RESQ: Queue<TraceResult, U8> = ();
     static mut PROD: Producer<'static, TraceResult, U8> = ();
     static mut CONS: Consumer<'static, TraceResult, U8> = ();
+
+    static mut SERIAL_RECV_BUF: Vec<u8, U64> = ();
 
     #[init]
     fn init() -> init::LateResources {
@@ -113,6 +120,7 @@ const APP: () = {
             IRPIN: irpin,
             USB_DEV: usb_dev,
             SERIAL: serial,
+            SERIAL_RECV_BUF: Default::default(),
         }
     }
 
@@ -174,14 +182,16 @@ const APP: () = {
         usb_write(&mut resources.SERIAL, b"\r\n");
     }
 
-    #[interrupt(resources = [USB_DEV, SERIAL])]
+    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF])]
     fn USB_HP_CAN_TX() {
-        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL);
+        let mut buf = resources.SERIAL_RECV_BUF;
+        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf);
     }
 
-    #[interrupt(resources = [USB_DEV, SERIAL])]
+    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF])]
     fn USB_LP_CAN_RX0() {
-        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL);
+        let mut buf = resources.SERIAL_RECV_BUF;
+        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf);
     }
 
     // Interrupt used by the tasks
@@ -194,26 +204,34 @@ const APP: () = {
 fn usb_poll<B: bus::UsbBus>(
     usb_dev: &mut UsbDevice<'static, B>,
     serial: &mut SerialPort<'static, B>,
+    buf: &mut Vec<u8, U64>,
 ) {
     if !usb_dev.poll(&mut [serial]) {
         return;
     }
 
-    let mut buf = [0u8; 8];
+    let mut localbuf = [0u8; 32];
 
-    match serial.read(&mut buf) {
+    match serial.read(&mut localbuf) {
         Ok(count) if count > 0 => {
-            // Echo back in upper case
-            for c in buf[0..count].iter_mut() {
-                if 0x61 <= *c && *c <= 0x7a {
-                    *c &= !0x20;
-                }
-            }
 
-            serial.write(&buf[0..count]).ok();
+            for c in &localbuf {
+                buf.push(*c).unwrap();
+            }
         }
         _ => {}
     }
+
+    // Try deserialising
+    let reply = match from_bytes::<common::Command>(&buf) {
+        Ok(cmd) => match cmd {
+            common::Command::Idle => hprintln!("cmd idle").unwrap(),
+            common::Command::CaptureRaw => hprintln!("cmd craw").unwrap(),
+        }
+        _ => hprintln!("FAIL").unwrap(),
+    };
+
+
 }
 
 fn usb_write<B: bus::UsbBus>(
