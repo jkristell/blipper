@@ -1,0 +1,11 @@
+[package]
+name = "blipper-host"
+version = "0.1.0"
+authors = ["Johan Kristell <johan@jott.se>"]
+edition = "2018"
+
+[dependencies]
+serialport = "3.3.0"
+vcd = "0.4.0"
+structopt = "0.3"
+infrared = { path = "../infrared"}
