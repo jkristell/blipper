@@ -10,11 +10,11 @@ categories = ["no-std", "embedded"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-stm32f1xx-hal = { version = "0.4", features = ["rt", "stm32f103" ] }
-cortex-m = "0.6"
+stm32f1xx-hal = { version = "0.3", features = ["rt", "stm32f103" ] }
+cortex-m = "0.5"
 cortex-m-rt = { version = "0.6.10", features = ["device"] }
 panic-semihosting = "0.5.2"
-stm32-usbd = { version = "0.4.0", features = ["stm32f103xx"] }
+stm32-usbd = { version = "0.3.0", features = ["stm32f103xx"] }
 usb-device = "0.2.0"
 usbd-serial = "0.1.0"
 cortex-m-rtfm = "0.4.3"

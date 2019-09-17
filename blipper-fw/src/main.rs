@@ -7,7 +7,6 @@ use cortex_m::asm::delay;
 use cortex_m_semihosting::hprintln;
 use rtfm::app;
 
-use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
@@ -36,6 +35,12 @@ use infrared::trace::{TraceReceiver, TraceResult};
 use common;
 
 const SAMPLERATE: u32 = 40_000;
+
+pub enum State {
+    Idle,
+    TraceRaw,
+}
+
 
 
 #[app(device = stm32f1xx_hal::stm32)]
@@ -75,7 +80,7 @@ const APP: () = {
         // BluePill board has a pull-up resistor on the D+ line.
         // Pull the D+ pin down to send a RESET condition to the USB bus.
         let mut usb_dp = gpioa.pa12.into_push_pull_output(&mut gpioa.crh);
-        usb_dp.set_low().unwrap();
+        usb_dp.set_low();
         delay(clocks.sysclk().0 / 100);
 
         let usb_dm = gpioa.pa11;
@@ -145,9 +150,12 @@ const APP: () = {
         // Sample num
         static mut TS: u32 = 0;
         // Active low
-        let rising = resources.IRPIN.is_low().unwrap();
+        let rising = resources.IRPIN.is_low();
         // Ack the timer interrupt
         resources.TIMER_MS.clear_update_interrupt_flag();
+
+
+
         // Step the receivers state machine
         let state = resources.RECEIVER.event(rising, *TS);
 
@@ -205,9 +213,9 @@ fn usb_poll<B: bus::UsbBus>(
     usb_dev: &mut UsbDevice<'static, B>,
     serial: &mut SerialPort<'static, B>,
     buf: &mut Vec<u8, U64>,
-) {
+) -> State {
     if !usb_dev.poll(&mut [serial]) {
-        return;
+        return State::Idle;
     }
 
     let mut localbuf = [0u8; 32];
@@ -223,15 +231,22 @@ fn usb_poll<B: bus::UsbBus>(
     }
 
     // Try deserialising
-    let reply = match from_bytes::<common::Command>(&buf) {
+    let state = match from_bytes::<common::Command>(&buf) {
         Ok(cmd) => match cmd {
             common::Command::Idle => hprintln!("cmd idle").unwrap(),
-            common::Command::CaptureRaw => hprintln!("cmd craw").unwrap(),
+            common::Command::CaptureRaw => {
+                // Initialize the capturing
+
+
+                hprintln!("cmd craw").unwrap()
+            },
         }
-        _ => hprintln!("FAIL").unwrap(),
+        _ => (), //hprintln!("FAIL").unwrap(),
     };
 
+    buf.clear();
 
+    State::Idle
 }
 
 fn usb_write<B: bus::UsbBus>(

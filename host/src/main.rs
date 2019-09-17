@@ -111,15 +111,15 @@ fn command_postcard(devpath: &PathBuf) -> io::Result<()> {
     };
 
     use postcard::to_vec;
-    //let mut port = serial_connect(devpath).expect("Failed to open serial");
+    let mut port = serial_connect(devpath).expect("Failed to open serial");
 
-    let cmd_send = common::Command::Idle;
+    let cmd_send = common::Command::CaptureRaw;
 
     let req: heapless::Vec<u8, U64> = to_vec(&cmd_send).unwrap();
 
     println!("{:?}", req);
 
-    //port.write_all(&req).unwrap();
+    port.write_all(&req).unwrap();
 
     Ok(())
 }
