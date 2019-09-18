@@ -27,7 +27,7 @@ use heapless::{
     Vec,
 };
 
-use postcard::from_bytes;
+use postcard::{to_vec, from_bytes, Serializer};
 
 use infrared::{Receiver, ReceiverState};
 use infrared::trace::{TraceReceiver, TraceResult};
@@ -36,12 +36,10 @@ use common;
 
 const SAMPLERATE: u32 = 40_000;
 
-pub enum State {
+pub enum BlipperState {
     Idle,
-    TraceRaw,
+    CaptureRaw,
 }
-
-
 
 #[app(device = stm32f1xx_hal::stm32)]
 const APP: () = {
@@ -58,6 +56,7 @@ const APP: () = {
     static mut CONS: Consumer<'static, TraceResult, U8> = ();
 
     static mut SERIAL_RECV_BUF: Vec<u8, U64> = ();
+    static mut BLIPPER_STATE: BlipperState = BlipperState::Idle;
 
     #[init]
     fn init() -> init::LateResources {
@@ -92,9 +91,9 @@ const APP: () = {
 
         let usb_dev =
             UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x16c0, 0x27dd))
-                .manufacturer("Fake company")
+                .manufacturer("Blipper Remotes")
                 .product("Blipper")
-                .serial_number("TEST")
+                .serial_number("007")
                 .device_class(USB_CLASS_CDC)
                 .build();
 
@@ -130,14 +129,21 @@ const APP: () = {
     }
 
     #[idle(
-        resources = [CONS],
-        spawn = [send_trace],
+        resources = [CONS, BLIPPER_STATE],
+        spawn = [send_capture],
     )]
     fn idle() -> ! {
+        use common::Reply;
+
+        let state = resources.BLIPPER_STATE;
+        let cons = &resources.CONS;
 
         loop {
-            while let Some(tr) = resources.CONS.dequeue() {
-                let _ = spawn.send_trace(tr);
+            match state {
+                BlipperState::Idle => (),
+                BlipperState::CaptureRaw => {
+                        spawn.send_capture();
+                }
             }
         }
     }
@@ -171,6 +177,31 @@ const APP: () = {
 
         // Update our timestamp
         *TS = TS.wrapping_add(1);
+    }
+
+    #[task(
+        priority = 1,
+        resources = [USB_DEV, SERIAL, CONS],
+    )]
+    fn send_capture() {
+
+        let mut consumer = &mut resources.CONS;
+        let mut serial = &mut resources.SERIAL;
+
+        while let Some(tr) = resources.CONS.dequeue() {
+
+            let dummybuf = [0u32; 4];
+
+            let reply_cmd = common::Reply::CaptureRawData {
+                data: tr.buf,
+            };
+            let reply: heapless::Vec<u8, U64> = to_vec(&reply_cmd).unwrap();
+            usb_write(&mut serial, &reply);
+        }
+
+
+
+        //usb_write(&mut resources.SERIAL, b"DATA ");
     }
 
     #[task(

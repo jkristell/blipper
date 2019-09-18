@@ -14,11 +14,11 @@ pub enum Command {
     */
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Reply<'a> {
     Ok,
     CaptureRawHeader {samplerate: u32},
-    CaptureRawData {data: &'a [u8]},
+    CaptureRawData {data: &'a [u32]},
     Info {info: Info},
 }
 
