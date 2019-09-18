@@ -23,7 +23,7 @@ use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use heapless::{
     spsc::{self, Producer, Consumer},
-    consts::{U8, U64},
+    consts::{U8, U64, U256, U1024},
     Vec,
 };
 
@@ -36,6 +36,7 @@ use common;
 
 const SAMPLERATE: u32 = 40_000;
 
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum BlipperState {
     Idle,
     CaptureRaw,
@@ -128,28 +129,17 @@ const APP: () = {
         }
     }
 
-    #[idle(
-        resources = [CONS, BLIPPER_STATE],
-        spawn = [send_capture],
-    )]
+    #[idle]
     fn idle() -> ! {
-        use common::Reply;
 
-        let state = resources.BLIPPER_STATE;
-        let cons = &resources.CONS;
+        hprintln!("Hello").unwrap();
 
-        loop {
-            match state {
-                BlipperState::Idle => (),
-                BlipperState::CaptureRaw => {
-                        spawn.send_capture();
-                }
-            }
-        }
+        loop {}
     }
 
     #[interrupt(
         priority = 2,
+        spawn = [send_capture],
         resources = [TIMER_MS, RECEIVER, IRPIN, PROD],
     )]
     fn TIM2() {
@@ -160,14 +150,15 @@ const APP: () = {
         // Ack the timer interrupt
         resources.TIMER_MS.clear_update_interrupt_flag();
 
-
-
         // Step the receivers state machine
         let state = resources.RECEIVER.event(rising, *TS);
 
         match state {
             ReceiverState::Done(res) => {
-                let _ = resources.PROD.enqueue(res);
+                //let _ = resources.PROD.enqueue(res);
+
+                spawn.send_capture(res);
+
                 resources.RECEIVER.reset();
             }
             ReceiverState::Receiving => {
@@ -183,19 +174,24 @@ const APP: () = {
         priority = 1,
         resources = [USB_DEV, SERIAL, CONS],
     )]
-    fn send_capture() {
+    fn send_capture(tr: TraceResult) {
 
-        let mut consumer = &mut resources.CONS;
+        //let mut consumer = &mut resources.CONS;
         let mut serial = &mut resources.SERIAL;
 
-        while let Some(tr) = resources.CONS.dequeue() {
+        {
 
-            let dummybuf = [0u32; 4];
+            let mut data = [0u8; 4 * 128];
+
+            for i in 0..tr.buf_len {
+                let bytes = tr.buf[i].to_le_bytes();
+                data[i*4 .. i*4 + 4].copy_from_slice(&bytes);
+            }
 
             let reply_cmd = common::Reply::CaptureRawData {
-                data: tr.buf,
+                data: &data[0..tr.buf_len * 4],
             };
-            let reply: heapless::Vec<u8, U64> = to_vec(&reply_cmd).unwrap();
+            let reply: heapless::Vec<u8, U1024> = to_vec(&reply_cmd).unwrap();
             usb_write(&mut serial, &reply);
         }
 
@@ -221,16 +217,18 @@ const APP: () = {
         usb_write(&mut resources.SERIAL, b"\r\n");
     }
 
-    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF])]
+    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIPPER_STATE])]
     fn USB_HP_CAN_TX() {
         let mut buf = resources.SERIAL_RECV_BUF;
-        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf);
+        let mut state = &mut resources.BLIPPER_STATE;
+        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf, &mut state);
     }
 
-    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF])]
+    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIPPER_STATE])]
     fn USB_LP_CAN_RX0() {
         let mut buf = resources.SERIAL_RECV_BUF;
-        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf);
+        let mut state = &mut resources.BLIPPER_STATE;
+        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf, &mut state);
     }
 
     // Interrupt used by the tasks
@@ -244,9 +242,13 @@ fn usb_poll<B: bus::UsbBus>(
     usb_dev: &mut UsbDevice<'static, B>,
     serial: &mut SerialPort<'static, B>,
     buf: &mut Vec<u8, U64>,
-) -> State {
+    state: &BlipperState,
+) -> BlipperState {
+
+
     if !usb_dev.poll(&mut [serial]) {
-        return State::Idle;
+        //FIXME:
+        return *state;
     }
 
     let mut localbuf = [0u8; 32];
@@ -277,7 +279,7 @@ fn usb_poll<B: bus::UsbBus>(
 
     buf.clear();
 
-    State::Idle
+    BlipperState::Idle
 }
 
 fn usb_write<B: bus::UsbBus>(

@@ -18,7 +18,7 @@ pub enum Command {
 pub enum Reply<'a> {
     Ok,
     CaptureRawHeader {samplerate: u32},
-    CaptureRawData {data: &'a [u32]},
+    CaptureRawData {data: &'a [u8]},
     Info {info: Info},
 }
 

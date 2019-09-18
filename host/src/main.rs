@@ -51,7 +51,8 @@ enum Command {
     Playback {
         path: Option<PathBuf>,
     },
-    Postcard {}
+    Postcard {},
+    PostcardRead {},
 }
 
 
@@ -125,6 +126,60 @@ fn command_postcard(devpath: &PathBuf) -> io::Result<()> {
 }
 
 
+fn command_postcard_read(devpath: &PathBuf) -> io::Result<()> {
+    use common;
+    use heapless::{
+        consts::{U64},
+    };
+    use postcard::{
+        to_vec, from_bytes
+    };
+    use std::convert::TryInto;
+
+    let mut port = serial_connect(devpath).expect("Failed to open serial");
+    let mut buf = [0; 1024];
+    let mut start = 0;
+    let mut end = 0;
+
+
+
+    loop {
+        match port.read(&mut buf[start..]) {
+            Ok(readlen) => {
+
+                end += readlen;
+
+                println!("Got data");
+
+                let state = match from_bytes::<common::Reply>(&buf) {
+                    Ok(reply) => match reply {
+                        common::Reply::CaptureRawData {data} => {
+                            println!("CAPTURE RAW DATA");
+
+                            let v: Vec<_> = data.chunks(4).map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap())).collect();
+
+                            println!("{:?}", v);
+
+                            for elem in buf.iter_mut() { *elem = 0; }
+                        },
+                        _ => println!("UNKNOWN"),
+                    }
+                    _ => println!("FAIL"),
+                };
+
+                //buf.clear();
+
+            },
+            Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
+            Err(e) => eprintln!("{:?}", e),
+        }
+    }
+
+    Ok(())
+}
+
+
+
 fn command_vcd(devpath: &PathBuf) -> io::Result<()> {
 
     let mut port = serial_connect(devpath).unwrap();
@@ -189,6 +244,9 @@ fn main() -> io::Result<()> {
         }
         Command::Postcard {} => {
             command_postcard(&devpath)
+        }
+        Command::PostcardRead {} => {
+            command_postcard_read(&devpath)
         }
     }
 }
