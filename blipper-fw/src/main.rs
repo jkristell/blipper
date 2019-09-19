@@ -7,7 +7,6 @@ use cortex_m::asm::delay;
 use cortex_m_semihosting::hprintln;
 use rtfm::app;
 
-
 use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     prelude::*,
@@ -15,24 +14,22 @@ use stm32f1xx_hal::{
     device,
 };
 
-
 use stm32_usbd::{UsbBus, UsbBusType};
 use usb_device::bus;
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use heapless::{
-    spsc::{self, Producer, Consumer},
-    consts::{U8, U64, U256, U1024},
+    consts::*,
     Vec,
 };
 
-use postcard::{to_vec, from_bytes, Serializer};
+use postcard::{to_vec, from_bytes};
 
 use infrared::{Receiver, ReceiverState};
 use infrared::trace::{TraceReceiver, TraceResult};
 
-use common;
+use common::{Reply, Command};
 
 const SAMPLERATE: u32 = 40_000;
 
@@ -52,10 +49,6 @@ const APP: () = {
     static mut RECEIVER: TraceReceiver = ();
     static mut IRPIN: PB8<Input<Floating>> = ();
 
-    //static mut RESQ: Queue<TraceResult, U8> = ();
-    static mut PROD: Producer<'static, TraceResult, U8> = ();
-    static mut CONS: Consumer<'static, TraceResult, U8> = ();
-
     static mut SERIAL_RECV_BUF: Vec<u8, U64> = ();
     static mut BLIPPER_STATE: BlipperState = BlipperState::Idle;
 
@@ -71,7 +64,6 @@ const APP: () = {
             .sysclk(48.mhz())
             .pclk1(24.mhz())
             .freeze(&mut flash.acr);
-
 
         assert!(clocks.usbclk_valid());
 
@@ -113,13 +105,7 @@ const APP: () = {
         // Setup the receiver
         let receiver = TraceReceiver::new(SAMPLERATE);
 
-        static mut QUEUE: spsc::Queue<TraceResult, U8> = spsc::Queue(heapless::i::Queue::new());
-        let (prod, cons) = unsafe {QUEUE.split()};
-
         init::LateResources {
-            PROD: prod,
-            CONS: cons,
-
             TIMER_MS: timer_ms,
             RECEIVER: receiver,
             IRPIN: irpin,
@@ -138,9 +124,8 @@ const APP: () = {
     }
 
     #[interrupt(
-        priority = 2,
         spawn = [send_capture],
-        resources = [TIMER_MS, RECEIVER, IRPIN, PROD],
+        resources = [TIMER_MS, RECEIVER, IRPIN, BLIPPER_STATE],
     )]
     fn TIM2() {
         // Sample num
@@ -155,14 +140,18 @@ const APP: () = {
 
         match state {
             ReceiverState::Done(res) => {
-                //let _ = resources.PROD.enqueue(res);
 
-                spawn.send_capture(res);
+                resources.BLIPPER_STATE.lock(|&mut state|
+                    if state == BlipperState::CaptureRaw {
+                        if spawn.send_capture(res).is_err() {
+                            hprintln!("Error sending").unwrap();
+                        }
+                    }
+                );
 
                 resources.RECEIVER.reset();
             }
-            ReceiverState::Receiving => {
-            }
+            ReceiverState::Receiving => (),
             _ => (),
         }
 
@@ -171,57 +160,30 @@ const APP: () = {
     }
 
     #[task(
-        priority = 1,
-        resources = [USB_DEV, SERIAL, CONS],
+        resources = [USB_DEV, SERIAL, ],
     )]
     fn send_capture(tr: TraceResult) {
 
-        //let mut consumer = &mut resources.CONS;
         let mut serial = &mut resources.SERIAL;
 
-        {
+        let mut data = [0u8; 4 * 128];
 
-            let mut data = [0u8; 4 * 128];
-
-            for i in 0..tr.buf_len {
-                let bytes = tr.buf[i].to_le_bytes();
-                data[i*4 .. i*4 + 4].copy_from_slice(&bytes);
-            }
-
-            let reply_cmd = common::Reply::CaptureRawData {
-                data: &data[0..tr.buf_len * 4],
-            };
-            let reply: heapless::Vec<u8, U1024> = to_vec(&reply_cmd).unwrap();
-            usb_write(&mut serial, &reply);
+        for i in 0..tr.buf_len {
+            let bytes = tr.buf[i].to_le_bytes();
+            data[i*4 .. i*4 + 4].copy_from_slice(&bytes);
         }
 
-
-
-        //usb_write(&mut resources.SERIAL, b"DATA ");
-    }
-
-    #[task(
-        priority = 1,
-        resources = [USB_DEV, SERIAL],
-    )]
-    fn send_trace(res: TraceResult) {
-
-        usb_write(&mut resources.SERIAL, b"DATA ");
-
-        for i in 0..res.buf_len {
-            let mut sb = [b' '; 11];
-            let s = u32_to_buf(res.buf[i], &mut sb[0..10]);
-            usb_write(&mut resources.SERIAL, &sb[s..]);
-        }
-
-        usb_write(&mut resources.SERIAL, b"\r\n");
+        let reply_cmd = Reply::CaptureRawData {
+            data: &data[0..tr.buf_len * 4],
+        };
+        let reply: heapless::Vec<u8, U1024> = to_vec(&reply_cmd).unwrap();
+        usb_write(&mut serial, &reply);
     }
 
     #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIPPER_STATE])]
     fn USB_HP_CAN_TX() {
         let mut buf = resources.SERIAL_RECV_BUF;
-        let mut state = &mut resources.BLIPPER_STATE;
-        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf, &mut state);
+        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf, &mut resources.BLIPPER_STATE);
     }
 
     #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIPPER_STATE])]
@@ -242,20 +204,18 @@ fn usb_poll<B: bus::UsbBus>(
     usb_dev: &mut UsbDevice<'static, B>,
     serial: &mut SerialPort<'static, B>,
     buf: &mut Vec<u8, U64>,
-    state: &BlipperState,
-) -> BlipperState {
+    state: &mut BlipperState,
+) {
 
 
     if !usb_dev.poll(&mut [serial]) {
-        //FIXME:
-        return *state;
+        return;
     }
 
     let mut localbuf = [0u8; 32];
 
     match serial.read(&mut localbuf) {
         Ok(count) if count > 0 => {
-
             for c in &localbuf {
                 buf.push(*c).unwrap();
             }
@@ -263,23 +223,27 @@ fn usb_poll<B: bus::UsbBus>(
         _ => {}
     }
 
-    // Try deserialising
-    let state = match from_bytes::<common::Command>(&buf) {
+    match from_bytes::<Command>(&buf) {
         Ok(cmd) => match cmd {
-            common::Command::Idle => hprintln!("cmd idle").unwrap(),
-            common::Command::CaptureRaw => {
+            Command::Idle => {
+                hprintln!("cmd idle").unwrap();
+                *state = BlipperState::Idle;
+                send_reply(serial, &Reply::Ok);
+            },
+            Command::CaptureRaw => {
                 // Initialize the capturing
+                *state = BlipperState::CaptureRaw;
 
+                let reply = Reply::CaptureRawHeader {samplerate: SAMPLERATE};
+                send_reply(serial, &reply);
 
                 hprintln!("cmd craw").unwrap()
             },
         }
-        _ => (), //hprintln!("FAIL").unwrap(),
+        _ => (),
     };
 
-    buf.clear();
-
-    BlipperState::Idle
+    //buf.clear();
 }
 
 fn usb_write<B: bus::UsbBus>(
@@ -289,25 +253,11 @@ fn usb_write<B: bus::UsbBus>(
     serial.write(towrite).ok();
 }
 
-fn u32_to_buf(mut num: u32, buf: &mut [u8]) -> usize {
 
-    let mut i = buf.len() - 1;
-
-    if num == 0 {
-        buf[i] = b'0';
-    } else {
-        loop {
-            let last = num % 10;
-            buf[i] = b'0' + (last as u8);
-
-            num /= 10;
-            if num == 0 {
-                break
-            }
-            i -= 1;
-        }
-    }
-
-    i
+fn send_reply<B: bus::UsbBus>(
+    serial: &mut SerialPort<'static, B>,
+    reply: &Reply,
+) {
+    let reply: heapless::Vec<u8, U1024> = to_vec(&reply).unwrap();
+    serial.write(&reply).ok();
 }
-

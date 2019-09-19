@@ -1,17 +1,24 @@
 use std::io;
+use std::io::ErrorKind::InvalidInput;
 use std::fs::File;
 use std::path::{PathBuf, Path};
+use std::convert::{TryFrom};
 
 use serialport;
 use serialport::prelude::*;
 use serialport::Result as SerialResult;
 use serialport::SerialPortSettings;
+
 use structopt;
-use blipper_host::vcdwriter::BlipperVcd;
 use structopt::StructOpt;
+
 use vcd::Value;
-use std::io::ErrorKind::InvalidInput;
-use std::convert::{TryFrom};
+use log::info;
+
+use common::{Reply, Command};
+
+use blipper_host::vcdwriter::BlipperVcd;
+
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
@@ -32,12 +39,12 @@ struct Opt {
     verbose: u8,
 
     #[structopt(subcommand)]
-    cmd: Command
+    cmd: CliCommand
 }
 
 
 #[derive(StructOpt, Debug)]
-enum Command {
+enum CliCommand {
     #[structopt(name = "vcd")]
     /// Capture ir signals from blipper device to vcd file
     Vcd {
@@ -106,7 +113,6 @@ fn write_vcd(vcdwriter: &mut BlipperVcd, bytes: &[u8]) -> io::Result<()> {
 }
 
 fn command_postcard(devpath: &PathBuf) -> io::Result<()> {
-    use common;
     use heapless::{
         consts::{U64},
     };
@@ -115,11 +121,8 @@ fn command_postcard(devpath: &PathBuf) -> io::Result<()> {
     let mut port = serial_connect(devpath).expect("Failed to open serial");
 
     let cmd_send = common::Command::CaptureRaw;
-
     let req: heapless::Vec<u8, U64> = to_vec(&cmd_send).unwrap();
-
     println!("{:?}", req);
-
     port.write_all(&req).unwrap();
 
     Ok(())
@@ -127,7 +130,6 @@ fn command_postcard(devpath: &PathBuf) -> io::Result<()> {
 
 
 fn command_postcard_read(devpath: &PathBuf) -> io::Result<()> {
-    use common;
     use heapless::{
         consts::{U64},
     };
@@ -137,38 +139,41 @@ fn command_postcard_read(devpath: &PathBuf) -> io::Result<()> {
     use std::convert::TryInto;
 
     let mut port = serial_connect(devpath).expect("Failed to open serial");
-    let mut buf = [0; 1024];
-    let mut start = 0;
-    let mut end = 0;
 
+    // Send command to device
+    let req: heapless::Vec<u8, U64> = to_vec(&Command::CaptureRaw).unwrap();
+    port.write_all(&req).unwrap();
 
 
     loop {
-        match port.read(&mut buf[start..]) {
-            Ok(readlen) => {
+        let mut sbuf = [0; 1024];
 
-                end += readlen;
+        match port.read(&mut sbuf[0..]) {
+            Ok(_readlen) => {
 
-                println!("Got data");
-
-                let state = match from_bytes::<common::Reply>(&buf) {
+                match from_bytes::<Reply>(&sbuf) {
                     Ok(reply) => match reply {
-                        common::Reply::CaptureRawData {data} => {
-                            println!("CAPTURE RAW DATA");
+                        Reply::CaptureRawHeader {samplerate} => {
+                            info!("CaptureRawHeader: {}", samplerate);
+                        }
+                        Reply::CaptureRawData {data} => {
+                            info!("Capture raw");
 
-                            let v: Vec<_> = data.chunks(4).map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap())).collect();
+                            let v: Vec<_> = data.chunks(4)
+                                .map(|chunk|
+                                    u32::from_le_bytes(chunk.try_into().unwrap()))
+                                .collect();
 
                             println!("{:?}", v);
 
-                            for elem in buf.iter_mut() { *elem = 0; }
+                            // clear buffer
+                            for elem in sbuf.iter_mut() { *elem = 0; }
                         },
-                        _ => println!("UNKNOWN"),
+                        _ => println!("Unhandled Reply"),
                     }
-                    _ => println!("FAIL"),
+                    //TODO: Implement chunked read if needed.
+                    _ => println!("Failed to read Reply"),
                 };
-
-                //buf.clear();
-
             },
             Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
             Err(e) => eprintln!("{:?}", e),
@@ -227,25 +232,26 @@ fn command_decode(_devpath: &Path) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
+    femme::start(log::LevelFilter::Info).unwrap();
 
     let opt = Opt::from_args();
     let devpath = opt.serial.unwrap_or(PathBuf::from("/dev/ttyACM0"));
 
     match opt.cmd {
-        Command::Vcd {} => {
+        CliCommand::Vcd {} => {
             command_vcd(&devpath)
         },
-        Command::Decode {} => {
+        CliCommand::Decode {} => {
             command_decode(&devpath)
         },
-        Command::Playback {path} => {
+        CliCommand::Playback {path} => {
             let path = path.unwrap_or(PathBuf::from("philips-bluray.vcd"));
             play_saved_vcd(&path, opt.debug)
         }
-        Command::Postcard {} => {
+        CliCommand::Postcard {} => {
             command_postcard(&devpath)
         }
-        Command::PostcardRead {} => {
+        CliCommand::PostcardRead {} => {
             command_postcard_read(&devpath)
         }
     }
