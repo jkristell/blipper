@@ -49,6 +49,28 @@ impl<'a> BlipperVcd<'a> {
         Ok(())
     }
 
+    pub fn write_vec<T: Into<u64>>(&mut self, v: Vec<T>) -> io::Result<()> {
+
+        let v2: Vec<u64> = v.into_iter()
+                .map(|v| v.into())
+                .scan(0, |state, delta| {
+                    *state += delta;
+                    Some(*state)
+                })
+                .collect();
+
+
+        let mut level = false;
+        for ts in &v2 {
+            self.write_value(0, *ts, level)?;
+            level = !level;
+        }
+
+        self.add_offset(v2.last().unwrap_or(&0) + 200);
+
+        Ok(())
+    }
+
     pub fn add_offset(&mut self, offset: u64) {
         self.timestamp += offset;
     }

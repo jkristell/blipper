@@ -13,12 +13,14 @@ use structopt;
 use structopt::StructOpt;
 
 use vcd::Value;
-use log::info;
+use log::{info, error};
 
-use common::{Reply, Command};
+use common::{Command};
 
-use blipper_host::vcdwriter::BlipperVcd;
+mod vcdwriter;
+mod serialpostcard;
 
+use vcdwriter::BlipperVcd;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
@@ -58,8 +60,11 @@ enum CliCommand {
     Playback {
         path: Option<PathBuf>,
     },
-    Postcard {},
-    PostcardRead {},
+    /// Read raw data from device
+    PostcardRead {
+        vcd: bool,
+    },
+    SetSamplerate {rate: u32},
 }
 
 
@@ -72,71 +77,29 @@ fn serial_connect(path: &Path) -> SerialResult<Box<dyn SerialPort>> {
     serialport::open_with_settings(path, &settings)
 }
 
+fn command_set_samplerate(devpath: &PathBuf, rate: u32) -> io::Result<()> {
+    use heapless::{consts::{U64}};
+    use postcard::{to_vec};
 
-fn parse_blipper_data(input: &str) -> Vec<u64> {
-
-    let mut iter = input.split(' ');
-
-    if Some("DATA") != iter.next() {
-        return vec![];
-    }
-
-    iter
-        .filter_map(|s| s.parse::<u64>().ok())
-        .scan(0, |state, delta| {
-            *state += delta;
-            Some(*state)
-        })
-        .collect()
-}
-
-
-fn write_vcd(vcdwriter: &mut BlipperVcd, bytes: &[u8]) -> io::Result<()> {
-
-    let inputline = std::str::from_utf8(bytes).unwrap();
-    let l = inputline.trim();
-
-    let mut level = true;
-
-    println!("LINE: {}", l);
-    let v = parse_blipper_data(&l);
-    println!("bd: {:?}", v);
-
-    for ts in &v {
-        vcdwriter.write_value(0, *ts, level)?;
-        level = !level;
-    }
-
-    vcdwriter.add_offset(v.last().unwrap_or(&0) + 200);
-
-    Ok(())
-}
-
-fn command_postcard(devpath: &PathBuf) -> io::Result<()> {
-    use heapless::{
-        consts::{U64},
-    };
-
-    use postcard::to_vec;
     let mut port = serial_connect(devpath).expect("Failed to open serial");
 
-    let cmd_send = common::Command::CaptureRaw;
-    let req: heapless::Vec<u8, U64> = to_vec(&cmd_send).unwrap();
-    println!("{:?}", req);
+    // Send command to device
+    let req: heapless::Vec<u8, U64> = to_vec(&Command::SetSampleRate(rate)).unwrap();
     port.write_all(&req).unwrap();
+
+    if serialpostcard::read_ok(&mut port).is_err() {
+        error!("Failed to read ok");
+    }
 
     Ok(())
 }
 
 
-fn command_postcard_read(devpath: &PathBuf) -> io::Result<()> {
-    use heapless::{
-        consts::{U64},
-    };
-    use postcard::{
-        to_vec, from_bytes
-    };
-    use std::convert::TryInto;
+fn command_capture_raw(devpath: &PathBuf, vcd: bool) -> io::Result<()> {
+    use heapless::{consts::{U64}};
+    use postcard::{to_vec};
+
+    dbg!(vcd);
 
     let mut port = serial_connect(devpath).expect("Failed to open serial");
 
@@ -144,83 +107,50 @@ fn command_postcard_read(devpath: &PathBuf) -> io::Result<()> {
     let req: heapless::Vec<u8, U64> = to_vec(&Command::CaptureRaw).unwrap();
     port.write_all(&req).unwrap();
 
-
-    loop {
-        let mut sbuf = [0; 1024];
-
-        match port.read(&mut sbuf[0..]) {
-            Ok(_readlen) => {
-
-                match from_bytes::<Reply>(&sbuf) {
-                    Ok(reply) => match reply {
-                        Reply::CaptureRawHeader {samplerate} => {
-                            info!("CaptureRawHeader: {}", samplerate);
-                        }
-                        Reply::CaptureRawData {data} => {
-                            info!("Capture raw");
-
-                            let v: Vec<_> = data.chunks(4)
-                                .map(|chunk|
-                                    u32::from_le_bytes(chunk.try_into().unwrap()))
-                                .collect();
-
-                            println!("{:?}", v);
-
-                            // clear buffer
-                            for elem in sbuf.iter_mut() { *elem = 0; }
-                        },
-                        _ => println!("Unhandled Reply"),
-                    }
-                    //TODO: Implement chunked read if needed.
-                    _ => println!("Failed to read Reply"),
-                };
-            },
-            Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-            Err(e) => eprintln!("{:?}", e),
-        }
+    if serialpostcard::read_ok(&mut port).is_err() {
+        error!("Failed to read ok");
+    } else {
+        info!("Got ok");
     }
 
-    Ok(())
-}
+    // Get the CaptureRawDataHeader
+    if serialpostcard::read_ok(&mut port).is_err() {
+        error!("Failed to read ok");
+    } else {
+        info!("Got capturerawHeader");
+    }
 
+    let mut file = File::create("blipper2.vcd")?;
+    let mut bvcd = None;
+    if vcd {
+        bvcd = Some(BlipperVcd::from_writer(&mut file, 25, &["ir"])?);
+    }
 
-
-fn command_vcd(devpath: &PathBuf) -> io::Result<()> {
-
-    let mut port = serial_connect(devpath).unwrap();
-
-    let mut file = File::create("blipper.vcd")?;
-    let mut bvcd = BlipperVcd::from_writer(&mut file, 25, &["ir"])?;
-
-    let mut buf = [0; 1024];
-    let mut start = 0;
-    let mut end = 0;
 
     loop {
-        match port.read(&mut buf[start..]) {
-            Ok(readlen) => {
+        match serialpostcard::read_capturerawdata(&mut port) {
+            Ok(rawdata) => {
 
-                end += readlen;
-
-                if let Some(newlinepos) = buf[..end].iter().position(|elem| *elem == b'\n') {
-
-                    write_vcd(&mut bvcd, &buf[..newlinepos])?;
-
-                    for i in 0..(buf.len() - newlinepos) {
-                        buf[i] = buf[newlinepos + i];
-                    }
-
-                    start = 0;
-                    end = 0;
+                if vcd {
+                    let v: Vec<_> = [rawdata.d0, rawdata.d1, rawdata.d2, rawdata.d3].concat();
+                    bvcd.as_mut().unwrap().write_vec(v);
                 } else {
-                    start += readlen;
+                    info!("Capture raw");
+                    println!("len: {}, samplerate: {}", rawdata.len, rawdata.samplerate);
+                    println!("{:?}", rawdata.d0);
+                    println!("{:?}", rawdata.d1);
+                    println!("{:?}", rawdata.d2);
+                    println!("{:?}", rawdata.d3);
+
                 }
             },
-            Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-            Err(e) => eprintln!("{:?}", e),
+            Err(_err) => {}
         }
     }
 }
+
+
+
 
 fn command_decode(_devpath: &Path) -> io::Result<()> {
     //use infrared;
@@ -239,7 +169,7 @@ fn main() -> io::Result<()> {
 
     match opt.cmd {
         CliCommand::Vcd {} => {
-            command_vcd(&devpath)
+            Ok(())
         },
         CliCommand::Decode {} => {
             command_decode(&devpath)
@@ -248,11 +178,11 @@ fn main() -> io::Result<()> {
             let path = path.unwrap_or(PathBuf::from("philips-bluray.vcd"));
             play_saved_vcd(&path, opt.debug)
         }
-        CliCommand::Postcard {} => {
-            command_postcard(&devpath)
+        CliCommand::PostcardRead {vcd} => {
+            command_capture_raw(&devpath, vcd)
         }
-        CliCommand::PostcardRead {} => {
-            command_postcard_read(&devpath)
+        CliCommand::SetSamplerate {rate} => {
+            command_set_samplerate(&devpath, rate)
         }
     }
 }
