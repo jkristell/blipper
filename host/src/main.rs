@@ -1,5 +1,4 @@
 use std::io;
-use std::io::ErrorKind::InvalidInput;
 use std::fs::File;
 use std::path::{PathBuf, Path};
 use std::convert::{TryFrom};
@@ -12,8 +11,7 @@ use serialport::SerialPortSettings;
 use structopt;
 use structopt::StructOpt;
 
-use vcd::Value;
-use log::{info, error};
+use log::{info, error, };
 
 use common::{Command};
 
@@ -25,20 +23,12 @@ use vcdwriter::BlipperVcd;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
 struct Opt {
-    /// Set speed
-    #[structopt(short = "s", long = "speed", default_value = "115200")]
-    speed: u32,
     /// Serial Device. Defaults to /dev/ttyACM0
     #[structopt(long = "device", parse(from_os_str))]
     serial: Option<PathBuf>,
 
     #[structopt(short, long)]
     debug: bool,
-
-    // The number of occurrences of the `v/verbose` flag
-    /// Verbose mode (-v, -vv, -vvv, etc.)
-    #[structopt(short, long, parse(from_occurrences))]
-    verbose: u8,
 
     #[structopt(subcommand)]
     cmd: CliCommand
@@ -47,23 +37,18 @@ struct Opt {
 
 #[derive(StructOpt, Debug)]
 enum CliCommand {
-    #[structopt(name = "vcd")]
-    /// Capture ir signals from blipper device to vcd file
-    Vcd {
-    },
-    #[structopt(name = "decode")]
     /// Decode in realtime with protocol
     Decode {
     },
-    #[structopt(name = "playback")]
     /// Playback vcd file
-    Playback {
+    PlaybackVcd {
         path: Option<PathBuf>,
     },
-    /// Read raw data from device
-    PostcardRead {
-        vcd: bool,
+    /// Capture data from device. Optionaly write it to file
+    Capture {
+        path: Option<PathBuf>,
     },
+    /// Set the samplerate of the receiver
     SetSamplerate {rate: u32},
 }
 
@@ -95,11 +80,9 @@ fn command_set_samplerate(devpath: &PathBuf, rate: u32) -> io::Result<()> {
 }
 
 
-fn command_capture_raw(devpath: &PathBuf, vcd: bool) -> io::Result<()> {
+fn command_capture_raw(devpath: &PathBuf, path: Option<PathBuf>) -> io::Result<()> {
     use heapless::{consts::{U64}};
     use postcard::{to_vec};
-
-    dbg!(vcd);
 
     let mut port = serial_connect(devpath).expect("Failed to open serial");
 
@@ -120,28 +103,26 @@ fn command_capture_raw(devpath: &PathBuf, vcd: bool) -> io::Result<()> {
         info!("Got capturerawHeader");
     }
 
-    let mut file = File::create("blipper2.vcd")?;
+    #[allow(unused_assignments)]
+    let mut file = None;
     let mut bvcd = None;
-    if vcd {
-        bvcd = Some(BlipperVcd::from_writer(&mut file, 25, &["ir"])?);
+    if let Some(path) = path {
+        file = Some(File::create(&path)?);
+        bvcd = Some(BlipperVcd::from_writer(file.as_mut().unwrap(), 25, &["ir"])?);
     }
-
 
     loop {
         match serialpostcard::read_capturerawdata(&mut port) {
             Ok(rawdata) => {
 
-                if vcd {
-                    let v: Vec<_> = [rawdata.d0, rawdata.d1, rawdata.d2, rawdata.d3].concat();
-                    bvcd.as_mut().unwrap().write_vec(v);
+                let v = [rawdata.d0, rawdata.d1, rawdata.d2, rawdata.d3].concat();
+
+                if let Some(ref mut bvcd) = bvcd {
+                    bvcd.write_vec(v).unwrap();
                 } else {
                     info!("Capture raw");
                     println!("len: {}, samplerate: {}", rawdata.len, rawdata.samplerate);
-                    println!("{:?}", rawdata.d0);
-                    println!("{:?}", rawdata.d1);
-                    println!("{:?}", rawdata.d2);
-                    println!("{:?}", rawdata.d3);
-
+                    println!("{:?}", v);
                 }
             },
             Err(_err) => {}
@@ -162,24 +143,28 @@ fn command_decode(_devpath: &Path) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
-    femme::start(log::LevelFilter::Info).unwrap();
-
     let opt = Opt::from_args();
+
+    let loglevel = if opt.debug {
+        log::LevelFilter::Debug
+    } else {
+        log::LevelFilter::Info
+    };
+
+    femme::start(loglevel).unwrap();
+
     let devpath = opt.serial.unwrap_or(PathBuf::from("/dev/ttyACM0"));
 
     match opt.cmd {
-        CliCommand::Vcd {} => {
-            Ok(())
-        },
         CliCommand::Decode {} => {
             command_decode(&devpath)
         },
-        CliCommand::Playback {path} => {
+        CliCommand::PlaybackVcd {path} => {
             let path = path.unwrap_or(PathBuf::from("philips-bluray.vcd"));
             play_saved_vcd(&path, opt.debug)
         }
-        CliCommand::PostcardRead {vcd} => {
-            command_capture_raw(&devpath, vcd)
+        CliCommand::Capture {path} => {
+            command_capture_raw(&devpath, path)
         }
         CliCommand::SetSamplerate {rate} => {
             command_set_samplerate(&devpath, rate)
@@ -190,12 +175,15 @@ fn main() -> io::Result<()> {
 fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
     use infrared::{Receiver, ReceiverState, rc6::Rc6Receiver};
 
-    let mut recv = Rc6Receiver::new(40_000);
+    let (samplerate, vcdvec) = vcdwriter::vcdfile_to_vec(path)?;
 
-    let vcditer = parse_vcd(path)?
+    info!("Replay of vcdfile, samplerate = {}", samplerate);
+
+    let vcditer = vcdvec
         .into_iter()
         .map(|(t, v)| (u32::try_from(t).unwrap(), v));
 
+    let mut recv = Rc6Receiver::new(samplerate);
 
     for (t, value) in vcditer {
 
@@ -206,7 +194,7 @@ fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
         }
 
         if let ReceiverState::Done(ref cmd) = state {
-            println!("Cmd: {:?}\n", cmd);
+            println!("Cmd: {:?}", cmd);
             recv.reset();
         }
 
@@ -220,34 +208,3 @@ fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
 }
 
 
-fn parse_vcd(path: &Path) -> io::Result<Vec<(u64, bool)>> {
-
-    let file = File::open(path)?;
-    let mut parser = vcd::Parser::new(&file);
-
-    // Parse the header and find the wires
-    let header = parser.parse_header()?;
-    let data = header.find_var(&["top", "ir"])
-        .ok_or_else(|| io::Error::new(InvalidInput, "no wire top.data"))?.code;
-
-    let timescale = header.timescale;
-    println!("{:?}", timescale);
-
-    // Iterate through the remainder of the file and decode the data
-    let mut current_ts = 0;
-    let mut res: Vec<(u64, bool)> = Vec::new();
-
-    for command_result in parser {
-        use vcd::Command::*;
-        let command = command_result?;
-        match command {
-            ChangeScalar(i, v) if i == data => {
-                let one = v == Value::V1;
-                res.push((current_ts, one));
-            }
-            Timestamp(ts) => current_ts = ts,
-            _ => (),
-        }
-    }
-    Ok(res)
-}

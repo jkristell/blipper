@@ -201,19 +201,6 @@ const APP: () = {
     }
 };
 
-/*
-fn do_capture_raw(receiver: &mut TraceReceiver, edge: bool, samplenum: u32) -> Option<TraceResult> {
-    // Step the receivers state machine
-    let state = receiver.event(edge, samplenum);
-
-    match state {
-        ReceiverState::Done(res) => {
-            Some(res)
-        },
-        _ => None
-    }
-}
-*/
 
 fn usb_poll<B: bus::UsbBus>(
     usb_dev: &mut UsbDevice<'static, B>,
