@@ -15,10 +15,10 @@ use log::{info, error, };
 
 use common::{Command};
 
-mod vcdwriter;
+mod blippervcd;
 mod serialpostcard;
 
-use vcdwriter::BlipperVcd;
+use blippervcd::BlipperVcd;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
@@ -109,9 +109,10 @@ fn command_capture_raw(devpath: &PathBuf, path: Option<PathBuf>) -> io::Result<(
             Ok(rawdata) => {
 
                 let v = rawdata.data.concat();
+                let s = &v[0..rawdata.len as usize];
 
                 if let Some(ref mut bvcd) = bvcd {
-                    bvcd.write_vec(v).unwrap();
+                    bvcd.write_vec(s).unwrap();
                 } else {
                     info!("Capture raw");
                     println!("len: {}, samplerate: {}", rawdata.len, rawdata.samplerate);
@@ -136,7 +137,9 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
     use infrared::nec::remotes::SpecialForMp3;
     use infrared::RemoteControl;
     use infrared::nec::NecCommand;
+    use infrared::rc5::Rc5Receiver;
 
+    let mut rc5 = Rc5Receiver::new(40_000);
     let mut rc6 = Rc6Receiver::new(40_000);
     let mut nec = NecReceiver::<u32>::new(NecType::Standard, 40_000);
     let mp3remote = SpecialForMp3;
@@ -160,11 +163,24 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
                 let v = rawdata.data.concat();
                 let s = &v[0..rawdata.len as usize];
 
-                let mut edge = true;
+                let mut edge = false;
                 let mut t: u32 = 0;
 
                 for dist in s {
                     t += u32::from(*dist);
+                    edge = !edge;
+
+                    // Rc5?
+                    match rc5.event(edge, t) {
+                        ReceiverState::Done(cmd) => {
+                            println!("Got Rc5Cmd: {:?}", cmd);
+                            rc5.reset();
+                        }
+                        ReceiverState::Err(_) => {
+                            rc5.reset();
+                        }
+                        _ => {},
+                    }
 
                     // Rc6?
                     if let ReceiverState::Done(cmd) = rc6.event(edge, t) {
@@ -173,29 +189,27 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
                     }
 
                     // Nec?
-                    if let ReceiverState::Done(neccmd) = nec.event(edge, t) {
-                        match neccmd {
-                            NecCommand::Payload(cmd) => {
-                                let cmd = mp3remote.decode(cmd);
-                                println!("Got NecCmd: {:?}", cmd);
+                    match nec.event(edge, t) {
+                        ReceiverState::Done(neccmd) => {
+                            match neccmd {
+                                NecCommand::Payload(cmd) => {
+                                    let cmd = mp3remote.decode(cmd);
+                                    println!("Got NecCmd: {:?}", cmd);
+                                }
+                                NecCommand::Repeat => {}
                             }
-                            NecCommand::Repeat => {}
+                            nec.reset();
                         }
-                        nec.reset();
+                        ReceiverState::Err(_) => {
+                            nec.reset();
+                        }
+                        _ => {},
                     }
-
-                    edge = !edge;
                 }
-
-
             },
             Err(_err) => {}
         }
     }
-
-
-
-    Ok(())
 }
 
 fn main() -> io::Result<()> {
@@ -229,9 +243,9 @@ fn main() -> io::Result<()> {
 }
 
 fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
-    use infrared::{Receiver, ReceiverState, rc6::Rc6Receiver};
+    use infrared::{Receiver, ReceiverState, rc5::Rc5Receiver};
 
-    let (samplerate, vcdvec) = vcdwriter::vcdfile_to_vec(path)?;
+    let (samplerate, vcdvec) = blippervcd::vcdfile_to_vec(path)?;
 
     info!("Replay of vcdfile, samplerate = {}", samplerate);
 
@@ -239,15 +253,23 @@ fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
         .into_iter()
         .map(|(t, v)| (u32::try_from(t).unwrap(), v));
 
-    let mut recv = Rc6Receiver::new(samplerate);
+    let sr = 40_000;
+    let mut recv = Rc5Receiver::new(sr);
 
+    let mut t_prev = 0;
+
+    if debug {
+        println!("T\tRc5\tRising\tDelta\t\tState");
+    }
     for (t, value) in vcditer {
 
         let state = recv.event(value, t);
 
         if debug {
-            println!("{} {} {} {:?}", t, recv.rc6_counter, value, recv.last_state);
+            println!("{}\t{}\t{}\t{:?}\t\t{:?}", t, recv.rc5_counter, value, t - t_prev, recv.last_state);
         }
+
+        t_prev = t;
 
         if let ReceiverState::Done(ref cmd) = state {
             println!("Cmd: {:?}", cmd);
@@ -255,7 +277,7 @@ fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
         }
 
         if let ReceiverState::Err(err) = state {
-            println!("Error: {:?}", err);
+            println!("--Error: {:?}", err);
             recv.reset();
         }
     }

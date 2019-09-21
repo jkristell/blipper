@@ -52,11 +52,11 @@ impl<'a> BlipperVcd<'a> {
         Ok(())
     }
 
-    pub fn write_vec<T: Into<u64>>(&mut self, v: Vec<T>) -> io::Result<()> {
+    pub fn write_vec<T: Copy + Into<u64>>(&mut self, v: &[T]) -> io::Result<()> {
 
-        let v2: Vec<u64> = v.into_iter()
-                .map(|v| v.into())
-                .scan(0, |state, delta| {
+        let v2: Vec<u64> = v.iter()
+                .map(|v| (*v).into())
+                .scan(0, |state, delta: u64| {
                     *state += delta;
                     Some(*state)
                 })
