@@ -96,13 +96,6 @@ fn command_capture_raw(devpath: &PathBuf, path: Option<PathBuf>) -> io::Result<(
         info!("Got ok");
     }
 
-    // Get the CaptureRawDataHeader
-    if serialpostcard::read_ok(&mut port).is_err() {
-        error!("Failed to read ok");
-    } else {
-        info!("Got capturerawHeader");
-    }
-
     #[allow(unused_assignments)]
     let mut file = None;
     let mut bvcd = None;
@@ -115,14 +108,14 @@ fn command_capture_raw(devpath: &PathBuf, path: Option<PathBuf>) -> io::Result<(
         match serialpostcard::read_capturerawdata(&mut port) {
             Ok(rawdata) => {
 
-                let v = [rawdata.d0, rawdata.d1, rawdata.d2, rawdata.d3].concat();
+                let v = rawdata.data.concat();
 
                 if let Some(ref mut bvcd) = bvcd {
                     bvcd.write_vec(v).unwrap();
                 } else {
                     info!("Capture raw");
                     println!("len: {}, samplerate: {}", rawdata.len, rawdata.samplerate);
-                    println!("{:?}", v);
+                    println!("{:?}", &v[0..rawdata.len as usize]);
                 }
             },
             Err(_err) => {}
@@ -133,11 +126,74 @@ fn command_capture_raw(devpath: &PathBuf, path: Option<PathBuf>) -> io::Result<(
 
 
 
-fn command_decode(_devpath: &Path) -> io::Result<()> {
-    //use infrared;
-    //use infrared::philips::PhilipsReceiver;
+fn command_decode(devpath: &Path) -> io::Result<()> {
+    use heapless::{consts::{U64}};
+    use postcard::{to_vec};
+    use infrared::rc6::Rc6Receiver;
+    use infrared::ReceiverState;
+    use infrared::Receiver;
+    use infrared::nec::{NecReceiver, NecType};
+    use infrared::nec::remotes::SpecialForMp3;
+    use infrared::RemoteControl;
+    use infrared::nec::NecCommand;
 
-    //let receiver = PhilipsReceiver::new();
+    let mut rc6 = Rc6Receiver::new(40_000);
+    let mut nec = NecReceiver::<u32>::new(NecType::Standard, 40_000);
+    let mp3remote = SpecialForMp3;
+
+    info!("Decode");
+    let mut port = serial_connect(devpath).expect("Failed to open serial");
+
+    // Send command to device
+    let req: heapless::Vec<u8, U64> = to_vec(&Command::CaptureRaw).unwrap();
+    port.write_all(&req).unwrap();
+
+    if serialpostcard::read_ok(&mut port).is_err() {
+        error!("Failed to read ok");
+    } else {
+        info!("Got ok");
+    }
+
+    loop {
+        match serialpostcard::read_capturerawdata(&mut port) {
+            Ok(rawdata) => {
+                let v = rawdata.data.concat();
+                let s = &v[0..rawdata.len as usize];
+
+                let mut edge = true;
+                let mut t: u32 = 0;
+
+                for dist in s {
+                    t += u32::from(*dist);
+
+                    // Rc6?
+                    if let ReceiverState::Done(cmd) = rc6.event(edge, t) {
+                        println!("Got Rc6Cmd: {:?}", cmd);
+                        rc6.reset();
+                    }
+
+                    // Nec?
+                    if let ReceiverState::Done(neccmd) = nec.event(edge, t) {
+                        match neccmd {
+                            NecCommand::Payload(cmd) => {
+                                let cmd = mp3remote.decode(cmd);
+                                println!("Got NecCmd: {:?}", cmd);
+                            }
+                            NecCommand::Repeat => {}
+                        }
+                        nec.reset();
+                    }
+
+                    edge = !edge;
+                }
+
+
+            },
+            Err(_err) => {}
+        }
+    }
+
+
 
     Ok(())
 }

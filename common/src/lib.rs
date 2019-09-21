@@ -22,10 +22,7 @@ pub enum Reply {
 pub struct RawData {
     pub len: u32,
     pub samplerate: u32,
-    pub d0: [u16; 32],
-    pub d1: [u16; 32],
-    pub d2: [u16; 32],
-    pub d3: [u16; 32],
+    pub data: [[u16; 32]; 4],
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]

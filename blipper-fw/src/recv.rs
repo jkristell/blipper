@@ -87,16 +87,13 @@ fn traceresult_to_reply(tr: TraceResult) -> Reply {
     let mut data = RawData {
         len: tr.buf_len as u32,
         samplerate: 40_000,
-        d0: [0; 32],
-        d1: [0; 32],
-        d2: [0; 32],
-        d3: [0; 32],
+        data: [[0; 32]; 4],
     };
 
-    data.d0.copy_from_slice(&tr.buf[0..32]);
-    data.d1.copy_from_slice(&tr.buf[32..64]);
-    data.d2.copy_from_slice(&tr.buf[64..96]);
-    data.d3.copy_from_slice(&tr.buf[96..128]);
+    data.data[0].copy_from_slice(&tr.buf[0..32]);
+    data.data[1].copy_from_slice(&tr.buf[32..64]);
+    data.data[2].copy_from_slice(&tr.buf[64..96]);
+    data.data[3].copy_from_slice(&tr.buf[96..128]);
 
     let mut reply_cmd = Reply::CaptureRawData { rawdata: data };
 
