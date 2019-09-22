@@ -1,7 +1,7 @@
-use std::io;
+use std::convert::TryFrom;
 use std::fs::File;
-use std::path::{PathBuf, Path};
-use std::convert::{TryFrom};
+use std::io;
+use std::path::{Path, PathBuf};
 
 use serialport;
 use serialport::prelude::*;
@@ -11,9 +11,9 @@ use serialport::SerialPortSettings;
 use structopt;
 use structopt::StructOpt;
 
-use log::{info, error, };
+use log::{error, info};
 
-use common::{Command};
+use common::Command;
 
 mod blippervcd;
 mod serialpostcard;
@@ -31,27 +31,20 @@ struct Opt {
     debug: bool,
 
     #[structopt(subcommand)]
-    cmd: CliCommand
+    cmd: CliCommand,
 }
-
 
 #[derive(StructOpt, Debug)]
 enum CliCommand {
     /// Decode in realtime with protocol
-    Decode {
-    },
+    Decode {},
     /// Playback vcd file
-    PlaybackVcd {
-        path: Option<PathBuf>,
-    },
+    PlaybackVcd { path: Option<PathBuf> },
     /// Capture data from device. Optionaly write it to file
-    Capture {
-        path: Option<PathBuf>,
-    },
-    /// Set the samplerate of the receiver
-    SetSamplerate {rate: u32},
+    Capture { path: Option<PathBuf> },
+    /// Use Device as <protocol> receiver
+    Protocol { id: u32 },
 }
-
 
 fn serial_connect(path: &Path) -> SerialResult<Box<dyn SerialPort>> {
     let settings = SerialPortSettings {
@@ -62,27 +55,39 @@ fn serial_connect(path: &Path) -> SerialResult<Box<dyn SerialPort>> {
     serialport::open_with_settings(path, &settings)
 }
 
-fn command_set_samplerate(devpath: &PathBuf, rate: u32) -> io::Result<()> {
-    use heapless::{consts::{U64}};
-    use postcard::{to_vec};
+fn command_protocol(devpath: &PathBuf, id: u32) -> io::Result<()> {
+    use heapless::consts::U64;
+    use postcard::to_vec;
 
     let mut port = serial_connect(devpath).expect("Failed to open serial");
 
     // Send command to device
-    let req: heapless::Vec<u8, U64> = to_vec(&Command::SetSampleRate(rate)).unwrap();
+    let req: heapless::Vec<u8, U64> = to_vec(&Command::CaptureProtocol(id)).unwrap();
     port.write_all(&req).unwrap();
 
     if serialpostcard::read_ok(&mut port).is_err() {
         error!("Failed to read ok");
     }
 
+    loop {
+        match serialpostcard::read_protocoldata(&mut port) {
+            Ok(genericremote) => {
+                info!("Protocol capture");
+                println!("{:?}", genericremote);
+            }
+            Err(_err) => {
+            }
+        }
+    }
+
+
+
     Ok(())
 }
 
-
 fn command_capture_raw(devpath: &PathBuf, path: Option<PathBuf>) -> io::Result<()> {
-    use heapless::{consts::{U64}};
-    use postcard::{to_vec};
+    use heapless::consts::U64;
+    use postcard::to_vec;
 
     let mut port = serial_connect(devpath).expect("Failed to open serial");
 
@@ -101,13 +106,16 @@ fn command_capture_raw(devpath: &PathBuf, path: Option<PathBuf>) -> io::Result<(
     let mut bvcd = None;
     if let Some(path) = path {
         file = Some(File::create(&path)?);
-        bvcd = Some(BlipperVcd::from_writer(file.as_mut().unwrap(), 25, &["ir"])?);
+        bvcd = Some(BlipperVcd::from_writer(
+            file.as_mut().unwrap(),
+            25,
+            &["ir"],
+        )?);
     }
 
     loop {
         match serialpostcard::read_capturerawdata(&mut port) {
             Ok(rawdata) => {
-
                 let v = rawdata.data.concat();
                 let s = &v[0..rawdata.len as usize];
 
@@ -118,26 +126,23 @@ fn command_capture_raw(devpath: &PathBuf, path: Option<PathBuf>) -> io::Result<(
                     println!("len: {}, samplerate: {}", rawdata.len, rawdata.samplerate);
                     println!("{:?}", &v[0..rawdata.len as usize]);
                 }
-            },
+            }
             Err(_err) => {}
         }
     }
 }
 
-
-
-
 fn command_decode(devpath: &Path) -> io::Result<()> {
-    use heapless::{consts::{U64}};
-    use postcard::{to_vec};
-    use infrared::rc6::Rc6Receiver;
-    use infrared::ReceiverState;
-    use infrared::Receiver;
-    use infrared::nec::{NecReceiver, NecType};
+    use heapless::consts::U64;
     use infrared::nec::remotes::SpecialForMp3;
-    use infrared::RemoteControl;
     use infrared::nec::NecCommand;
+    use infrared::nec::{NecReceiver, NecType};
     use infrared::rc5::Rc5Receiver;
+    use infrared::rc6::Rc6Receiver;
+    use infrared::Receiver;
+    use infrared::ReceiverState;
+    use infrared::RemoteControl;
+    use postcard::to_vec;
 
     let mut rc5 = Rc5Receiver::new(40_000);
     let mut rc6 = Rc6Receiver::new(40_000);
@@ -179,7 +184,7 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
                         ReceiverState::Err(_) => {
                             rc5.reset();
                         }
-                        _ => {},
+                        _ => {}
                     }
 
                     // Rc6?
@@ -203,10 +208,10 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
                         ReceiverState::Err(_) => {
                             nec.reset();
                         }
-                        _ => {},
+                        _ => {}
                     }
                 }
-            },
+            }
             Err(_err) => {}
         }
     }
@@ -226,24 +231,18 @@ fn main() -> io::Result<()> {
     let devpath = opt.serial.unwrap_or(PathBuf::from("/dev/ttyACM0"));
 
     match opt.cmd {
-        CliCommand::Decode {} => {
-            command_decode(&devpath)
-        },
-        CliCommand::PlaybackVcd {path} => {
+        CliCommand::Decode {} => command_decode(&devpath),
+        CliCommand::PlaybackVcd { path } => {
             let path = path.unwrap_or(PathBuf::from("philips-bluray.vcd"));
             play_saved_vcd(&path, opt.debug)
         }
-        CliCommand::Capture {path} => {
-            command_capture_raw(&devpath, path)
-        }
-        CliCommand::SetSamplerate {rate} => {
-            command_set_samplerate(&devpath, rate)
-        }
+        CliCommand::Capture { path } => command_capture_raw(&devpath, path),
+        CliCommand::Protocol { id } => command_protocol(&devpath, id),
     }
 }
 
 fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
-    use infrared::{Receiver, ReceiverState, rc5::Rc5Receiver};
+    use infrared::{rc5::Rc5Receiver, Receiver, ReceiverState};
 
     let (samplerate, vcdvec) = blippervcd::vcdfile_to_vec(path)?;
 
@@ -262,11 +261,17 @@ fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
         println!("T\tRc5\tRising\tDelta\t\tState");
     }
     for (t, value) in vcditer {
-
         let state = recv.event(value, t);
 
         if debug {
-            println!("{}\t{}\t{}\t{:?}\t\t{:?}", t, recv.rc5_counter, value, t - t_prev, recv.last_state);
+            println!(
+                "{}\t{}\t{}\t{:?}\t\t{:?}",
+                t,
+                recv.rc5_counter,
+                value,
+                t - t_prev,
+                recv.last_state
+            );
         }
 
         t_prev = t;
@@ -284,5 +289,3 @@ fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
 
     Ok(())
 }
-
-

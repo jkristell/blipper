@@ -23,29 +23,21 @@ use heapless::{
     consts::*,
     Vec,
 };
+use postcard::{to_vec, from_bytes};
+use common::{Reply, Command, Info};
 
 mod recv;
-
 use recv::BlipperBlip;
 
-use postcard::{to_vec, from_bytes};
-
-use infrared::{Receiver, ReceiverState};
-use infrared::trace::{TraceReceiver, TraceResult};
-
-use common::{Reply, Command};
-use infrared::rc6::Rc6Receiver;
-use infrared::nec::{NecReceiver, NecTransmitter, NecType};
-
+const VERSION: u32 = 1;
 const SAMPLERATE: u32 = 40_000;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum BlipperState {
     Idle,
     CaptureRaw,
+    CaptureProtocol,
 }
-
-
 
 #[app(device = stm32f1xx_hal::stm32)]
 const APP: () = {
@@ -54,12 +46,9 @@ const APP: () = {
     static mut SERIAL: SerialPort<'static, UsbBusType> = ();
 
     static mut TIMER_MS: Timer<device::TIM2> = ();
-    static mut RECEIVER: TraceReceiver = ();
     static mut IRPIN: PB8<Input<Floating>> = ();
-
     static mut SERIAL_RECV_BUF: Vec<u8, U64> = ();
-    //static mut BLIPPER_STATE: BlipperState = BlipperState::Idle;
-    //static mut BLIPPER_SAMPLERATE: u32 = 40_000;
+
     static mut BLIPPER_BLIP: BlipperBlip = ();
 
     #[init]
@@ -95,7 +84,7 @@ const APP: () = {
         let usb_dev =
             UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x16c0, 0x27dd))
                 .manufacturer("Blipper Remotes")
-                .product("Blipper")
+                .product("Blipper 010")
                 .serial_number("007")
                 .device_class(USB_CLASS_CDC)
                 .build();
@@ -112,12 +101,8 @@ const APP: () = {
         let mut gpiob = device.GPIOB.split(&mut rcc.apb2);
         let irpin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
 
-        // Setup the receiver
-        let receiver = TraceReceiver::new(SAMPLERATE);
-
         init::LateResources {
             TIMER_MS: timer_ms,
-            RECEIVER: receiver,
             IRPIN: irpin,
             USB_DEV: usb_dev,
             SERIAL: serial,
@@ -137,34 +122,40 @@ const APP: () = {
 
     #[interrupt(
         spawn = [send_reply],
-        resources = [TIMER_MS, RECEIVER, IRPIN, BLIPPER_BLIP],
+        resources = [TIMER_MS, IRPIN, BLIPPER_BLIP],
     )]
     fn TIM2() {
         static mut TS: u32 = 0;
         let edge = resources.IRPIN.is_low();
-
         // Ack the timer interrupt
         resources.TIMER_MS.clear_update_interrupt_flag();
 
-        //let mut receiver = &mut resources.RECEIVER;
-
-        //TODO: Zero TS on blipper_state change
-
-        let mut blip = &mut resources.BLIPPER_BLIP;
+        let blip = &mut resources.BLIPPER_BLIP;
 
         match blip.state {
-            BlipperState::Idle => (),
+            BlipperState::Idle => {}
             BlipperState::CaptureRaw => {
-                // Step the receivers state machine
-
                 if let Some(reply) = blip.tick(edge, *TS) {
+                    spawn.send_reply(reply).unwrap();
+                    /*
+                    {
+                        hprintln!("Error sending").unwrap();
+                    }
+                    */
+
+                    blip.reset();
+                }
+            }
+            BlipperState::CaptureProtocol => {
+                if let Some(reply) = blip.tick(edge, *TS) {
+
                     if spawn.send_reply(reply).is_err() {
                         hprintln!("Error sending").unwrap();
                     }
 
                     blip.reset();
                 }
-            },
+            }
         }
 
         // Update our timestamp
@@ -231,18 +222,23 @@ fn usb_poll<B: bus::UsbBus>(
                 hprintln!("cmd idle").unwrap();
                 blipper_blip.state = BlipperState::Idle;
                 usb_send_reply(serial, &Reply::Ok);
-            },
-            Command::SetSampleRate(value) => {
-                blipper_blip.samplerate = value;
-                usb_send_reply(serial, &Reply::Ok);
+            }
+            Command::Info => {
+                let info: Info = Info {
+                    version: VERSION,
+                };
+                usb_send_reply(serial, &Reply::Info {info});
             }
             Command::CaptureRaw => {
-                // Initialize the capturing
+                hprintln!("cap raw").unwrap();
+                blipper_blip.select_receiver(0);
                 blipper_blip.state = BlipperState::CaptureRaw;
-
-                //let reply = Reply::CaptureRawHeader {samplerate: blipper_blip.samplerate};
-                //usb_send_reply(serial, &reply);
-            },
+            }
+            Command::CaptureProtocol(id) => {
+                hprintln!("prot {}", id).unwrap();
+                blipper_blip.select_receiver(id);
+                blipper_blip.state = BlipperState::CaptureProtocol;
+            }
         }
         Err(_) => {},
     };

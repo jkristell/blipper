@@ -1,5 +1,5 @@
 [package]
-name = "blipper"
+name = "blipper-fw"
 version = "0.0.1"
 authors = ["Johan Kristell <johan@jott.se>"]
 edition = "2018"

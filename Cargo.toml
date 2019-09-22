@@ -1,0 +1,14 @@
+[package]
+name = "blipper"
+version = "0.1.0"
+authors = ["Johan Kristell <johanl@jott.se>"]
+edition = "2018"
+
+[dependencies]
+
+[workspace]
+members = [
+    "common",
+    "host",
+    "blipper-fw",
+]
