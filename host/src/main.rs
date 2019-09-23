@@ -80,8 +80,6 @@ fn command_protocol(devpath: &PathBuf, id: u32) -> io::Result<()> {
         }
     }
 
-
-
     Ok(())
 }
 

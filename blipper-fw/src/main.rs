@@ -26,18 +26,11 @@ use heapless::{
 use postcard::{to_vec, from_bytes};
 use common::{Reply, Command, Info};
 
-mod recv;
-use recv::BlipperBlip;
+mod blip;
 
 const VERSION: u32 = 1;
 const SAMPLERATE: u32 = 40_000;
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum BlipperState {
-    Idle,
-    CaptureRaw,
-    CaptureProtocol,
-}
 
 #[app(device = stm32f1xx_hal::stm32)]
 const APP: () = {
@@ -49,7 +42,7 @@ const APP: () = {
     static mut IRPIN: PB8<Input<Floating>> = ();
     static mut SERIAL_RECV_BUF: Vec<u8, U64> = ();
 
-    static mut BLIPPER_BLIP: BlipperBlip = ();
+    static mut BLIP: blip::Blip = ();
 
     #[init]
     fn init() -> init::LateResources {
@@ -107,22 +100,21 @@ const APP: () = {
             USB_DEV: usb_dev,
             SERIAL: serial,
             SERIAL_RECV_BUF: Default::default(),
-
-            BLIPPER_BLIP: BlipperBlip::new(),
+            BLIP: blip::Blip::new(SAMPLERATE),
         }
     }
 
     #[idle]
     fn idle() -> ! {
-
         hprintln!("In idle").unwrap();
-
-        loop {}
+        loop {
+            continue;
+        }
     }
 
     #[interrupt(
         spawn = [send_reply],
-        resources = [TIMER_MS, IRPIN, BLIPPER_BLIP],
+        resources = [TIMER_MS, IRPIN, BLIP],
     )]
     fn TIM2() {
         static mut TS: u32 = 0;
@@ -130,25 +122,12 @@ const APP: () = {
         // Ack the timer interrupt
         resources.TIMER_MS.clear_update_interrupt_flag();
 
-        let blip = &mut resources.BLIPPER_BLIP;
+        let blip = &mut resources.BLIP;
 
         match blip.state {
-            BlipperState::Idle => {}
-            BlipperState::CaptureRaw => {
-                if let Some(reply) = blip.tick(edge, *TS) {
-                    spawn.send_reply(reply).unwrap();
-                    /*
-                    {
-                        hprintln!("Error sending").unwrap();
-                    }
-                    */
-
-                    blip.reset();
-                }
-            }
-            BlipperState::CaptureProtocol => {
-                if let Some(reply) = blip.tick(edge, *TS) {
-
+            blip::State::Idle => {}
+            blip::State::CaptureRaw => {
+                if let Some(reply) = blip.sample(edge, *TS) {
                     if spawn.send_reply(reply).is_err() {
                         hprintln!("Error sending").unwrap();
                     }
@@ -168,21 +147,21 @@ const APP: () = {
     fn send_reply(reply: Reply) {
         let mut serial = &mut resources.SERIAL;
 
-        let reply_vec: heapless::Vec<u8, U2048> = to_vec(&reply).unwrap();
+        let reply_vec: heapless::Vec<u8, U512> = to_vec(&reply).unwrap();
         usb_write(&mut serial, &reply_vec);
     }
 
-    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIPPER_BLIP, ])]
+    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIP, ])]
     fn USB_HP_CAN_TX() {
         let mut buf = resources.SERIAL_RECV_BUF;
-        let mut blipper_blip = &mut resources.BLIPPER_BLIP;
+        let mut blipper_blip = &mut resources.BLIP;
         usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf, &mut blipper_blip);
     }
 
-    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIPPER_BLIP, ])]
+    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIP, ])]
     fn USB_LP_CAN_RX0() {
         let mut buf = resources.SERIAL_RECV_BUF;
-        let mut blipper_blip = &mut resources.BLIPPER_BLIP;
+        let mut blipper_blip = &mut resources.BLIP;
         usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf, &mut blipper_blip);
     }
 
@@ -197,7 +176,7 @@ fn usb_poll<B: bus::UsbBus>(
     usb_dev: &mut UsbDevice<'static, B>,
     serial: &mut SerialPort<'static, B>,
     buf: &mut Vec<u8, U64>,
-    blipper_blip: &mut BlipperBlip
+    blip: &mut blip::Blip
     //state: &mut BlipperState,
     //samplerate: &mut u32,
 ) {
@@ -220,7 +199,7 @@ fn usb_poll<B: bus::UsbBus>(
         Ok(cmd) => match cmd {
             Command::Idle => {
                 hprintln!("cmd idle").unwrap();
-                blipper_blip.state = BlipperState::Idle;
+                blip.state = blip::State::Idle;
                 usb_send_reply(serial, &Reply::Ok);
             }
             Command::Info => {
@@ -231,13 +210,10 @@ fn usb_poll<B: bus::UsbBus>(
             }
             Command::CaptureRaw => {
                 hprintln!("cap raw").unwrap();
-                blipper_blip.select_receiver(0);
-                blipper_blip.state = BlipperState::CaptureRaw;
+                blip.state = blip::State::CaptureRaw;
             }
             Command::CaptureProtocol(id) => {
-                hprintln!("prot {}", id).unwrap();
-                blipper_blip.select_receiver(id);
-                blipper_blip.state = BlipperState::CaptureProtocol;
+                hprintln!("Capture protocol not implemented {}", id).unwrap();
             }
         }
         Err(_) => {},
@@ -269,7 +245,7 @@ fn usb_send_reply<B: bus::UsbBus>(
     serial: &mut SerialPort<'static, B>,
     reply: &Reply,
 ) {
-    let reply: heapless::Vec<u8, U1024> = to_vec(&reply).unwrap();
+    let replybytes: heapless::Vec<u8, U1024> = to_vec(&reply).unwrap();
 
-    serial.write(&reply).ok();
+    usb_write(serial, &replybytes);
 }
