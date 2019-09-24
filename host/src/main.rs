@@ -20,6 +20,7 @@ mod serialpostcard;
 
 use blippervcd::BlipperVcd;
 use infrared::rc6::rc6_multiplier;
+use infrared::nec::NecSamsungReceiver;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
@@ -153,6 +154,7 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
     let mut rc5 = Rc5Receiver::new(40_000);
     let mut rc6 = Rc6Receiver::new(40_000);
     let mut nec = NecReceiver::new(40_000);
+    let mut nes = NecSamsungReceiver::new(40_000);
     let mp3remote = SpecialForMp3;
 
     info!("Decode");
@@ -218,6 +220,20 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
                         }
                         _ => {}
                     }
+
+                    // Samsung Nec
+                    match nes.sample(edge, t) {
+                        ReceiverState::Done(neccmd) => {
+                            println!("neccmd: {:?} {:X?}", neccmd, nes.bitbuf);
+                            nes.reset();
+                        }
+                        ReceiverState::Error(err) => {
+                            println!("err: {:?}", err);
+                            nes.reset();
+                        }
+                        _ => {}
+                    }
+
 /*
                     println!("{:?} -> {:?} {} {} {}",
                         nec.prev_state,

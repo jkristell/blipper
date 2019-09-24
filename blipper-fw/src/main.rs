@@ -106,7 +106,7 @@ const APP: () = {
 
     #[idle]
     fn idle() -> ! {
-        hprintln!("In idle").unwrap();
+        hprintln!("Ready!").unwrap();
         loop {
             continue;
         }
