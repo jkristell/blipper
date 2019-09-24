@@ -45,10 +45,11 @@ fn traceresult_to_reply(samplerate: u32, buf: &[u16]) -> Reply {
         len: buf.len() as u32,
     };
 
-    rawdata.data[0].copy_from_slice(&buf[0..32]);
-    rawdata.data[1].copy_from_slice(&buf[32..64]);
-    rawdata.data[2].copy_from_slice(&buf[64..96]);
-    rawdata.data[3].copy_from_slice(&buf[96..128]);
+    for i in 0..buf.len() {
+        let idx = i % 32;
+        let bufidx = i / 32;
+        rawdata.data[bufidx][idx] = buf[i];
+    }
 
     Reply::CaptureRawData { rawdata }
 }

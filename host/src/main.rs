@@ -19,6 +19,7 @@ mod blippervcd;
 mod serialpostcard;
 
 use blippervcd::BlipperVcd;
+use infrared::rc6::rc6_multiplier;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
@@ -111,6 +112,13 @@ fn command_capture_raw(devpath: &PathBuf, path: Option<PathBuf>) -> io::Result<(
         )?);
     }
 
+    for i in &[1, 2, 3, 6] {
+        let r = rc6_multiplier(40_000, *i);
+        println!("{} = {:?}", i, r);
+    }
+
+
+
     loop {
         match serialpostcard::read_capturerawdata(&mut port) {
             Ok(rawdata) => {
@@ -144,7 +152,7 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
 
     let mut rc5 = Rc5Receiver::new(40_000);
     let mut rc6 = Rc6Receiver::new(40_000);
-    let mut nec = NecReceiver::<u32>::new(NecType::Standard, 40_000);
+    let mut nec = NecReceiver::new(NecType::Standard, 40_000);
     let mp3remote = SpecialForMp3;
 
     info!("Decode");
@@ -160,6 +168,8 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
         info!("Got ok");
     }
 
+    println!("{:?}", nec.tolerance);
+
     loop {
         match serialpostcard::read_capturerawdata(&mut port) {
             Ok(rawdata) => {
@@ -174,40 +184,59 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
                     edge = !edge;
 
                     // Rc5?
-                    match rc5.event(edge, t) {
+                    match rc5.sample(edge, t) {
                         ReceiverState::Done(cmd) => {
                             println!("Got Rc5Cmd: {:?}", cmd);
                             rc5.reset();
                         }
-                        ReceiverState::Err(_) => {
+                        ReceiverState::Error(_) => {
                             rc5.reset();
                         }
                         _ => {}
                     }
 
                     // Rc6?
-                    if let ReceiverState::Done(cmd) = rc6.event(edge, t) {
-                        println!("Got Rc6Cmd: {:?}", cmd);
-                        rc6.reset();
-                    }
+                    match rc6.sample(edge, t) {
 
+                        ReceiverState::Done(cmd) => {
+                            println!("Got Rc6Cmd: {:?}", cmd);
+                            rc6.reset();
+                        }
+                        ReceiverState::Error(err) => {
+                            println!("Rc Err: {:?}", err);
+                            rc6.reset();
+                        }
+                        _ => {}
+                    }
+/*
+                    println!("{} {} {:?} {:?}",
+                        rc6.last,
+                        rc6.last_interval,
+                        rc6.last_state,
+                        rc6.n_units,
+                    );
+*/
                     // Nec?
-                    match nec.event(edge, t) {
+                    match nec.sample(edge, t) {
                         ReceiverState::Done(neccmd) => {
-                            match neccmd {
-                                NecCommand::Payload(cmd) => {
-                                    let cmd = mp3remote.decode(cmd);
-                                    println!("Got NecCmd: {:?}", cmd);
-                                }
-                                NecCommand::Repeat => {}
-                            }
+                            println!("neccmd: {:?} {:X?}", neccmd, nec.bitbuf);
                             nec.reset();
                         }
-                        ReceiverState::Err(_) => {
+                        ReceiverState::Error(err) => {
+                            println!("err: {:?}", err);
                             nec.reset();
                         }
                         _ => {}
                     }
+/*
+                    println!("{:?} -> {:?} {} {} {}",
+                        nec.prev_state,
+                        nec.state,
+                        nec.interval,
+                        nec.prev_pinval,
+                        nec.prev_timestamp,
+                    );
+                    */
                 }
             }
             Err(_err) => {}
@@ -259,7 +288,7 @@ fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
         println!("T\tRc5\tRising\tDelta\t\tState");
     }
     for (t, value) in vcditer {
-        let state = recv.event(value, t);
+        let state = recv.sample(value, t);
 
         if debug {
             println!(
@@ -279,7 +308,7 @@ fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
             recv.reset();
         }
 
-        if let ReceiverState::Err(err) = state {
+        if let ReceiverState::Error(err) = state {
             println!("--Error: {:?}", err);
             recv.reset();
         }
