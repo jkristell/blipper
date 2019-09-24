@@ -142,7 +142,7 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
     use heapless::consts::U64;
     use infrared::nec::remotes::SpecialForMp3;
     use infrared::nec::NecCommand;
-    use infrared::nec::{NecReceiver, NecType};
+    use infrared::nec::{NecReceiver};
     use infrared::rc5::Rc5Receiver;
     use infrared::rc6::Rc6Receiver;
     use infrared::Receiver;
@@ -152,7 +152,7 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
 
     let mut rc5 = Rc5Receiver::new(40_000);
     let mut rc6 = Rc6Receiver::new(40_000);
-    let mut nec = NecReceiver::new(NecType::Standard, 40_000);
+    let mut nec = NecReceiver::new(40_000);
     let mp3remote = SpecialForMp3;
 
     info!("Decode");
@@ -167,8 +167,6 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
     } else {
         info!("Got ok");
     }
-
-    println!("{:?}", nec.tolerance);
 
     loop {
         match serialpostcard::read_capturerawdata(&mut port) {
@@ -208,14 +206,6 @@ fn command_decode(devpath: &Path) -> io::Result<()> {
                         }
                         _ => {}
                     }
-/*
-                    println!("{} {} {:?} {:?}",
-                        rc6.last,
-                        rc6.last_interval,
-                        rc6.last_state,
-                        rc6.n_units,
-                    );
-*/
                     // Nec?
                     match nec.sample(edge, t) {
                         ReceiverState::Done(neccmd) => {
@@ -289,17 +279,6 @@ fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
     }
     for (t, value) in vcditer {
         let state = recv.sample(value, t);
-
-        if debug {
-            println!(
-                "{}\t{}\t{}\t{:?}\t\t{:?}",
-                t,
-                recv.rc5_counter,
-                value,
-                t - t_prev,
-                recv.last_state
-            );
-        }
 
         t_prev = t;
 
