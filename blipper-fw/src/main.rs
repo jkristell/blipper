@@ -8,10 +8,11 @@ use cortex_m_semihosting::hprintln;
 use rtfm::app;
 
 use stm32f1xx_hal::{
-    gpio::{gpiob::PB8, Floating, Input},
+    gpio::{gpiob::{PB8, PB9}, Floating, Input},
     prelude::*,
     timer::{self, Timer},
     device,
+    stm32::TIM4,
 };
 
 use stm32_usbd::{UsbBus, UsbBusType};
@@ -25,11 +26,26 @@ use heapless::{
 };
 use postcard::{to_vec, from_bytes};
 use common::{Reply, Command, Info};
+use stm32f1xx_hal::pwm::{Pwm, C4, Pins};
+use stm32f1xx_hal::gpio::{Alternate, PushPull};
+use infrared::Transmitter;
+use infrared::nec::NecCommand;
 
 mod blip;
 
 const VERSION: u32 = 1;
 const SAMPLERATE: u32 = 40_000;
+
+struct PwmChannels(PB9<Alternate<PushPull>>);
+impl Pins<TIM4> for PwmChannels {
+    const REMAP: u8 = 0b00;
+    const C1: bool = false;
+    const C2: bool = false;
+    const C3: bool = false;
+    const C4: bool = true; // PB9
+    type Channels = Pwm<TIM4, C4>;
+}
+
 
 
 #[app(device = stm32f1xx_hal::stm32)]
@@ -40,6 +56,8 @@ const APP: () = {
 
     static mut TIMER_MS: Timer<device::TIM2> = ();
     static mut IRPIN: PB8<Input<Floating>> = ();
+    static mut PWM: Pwm<TIM4, C4> = ();
+
     static mut SERIAL_RECV_BUF: Vec<u8, U64> = ();
 
     static mut BLIP: blip::Blip = ();
@@ -94,9 +112,27 @@ const APP: () = {
         let mut gpiob = device.GPIOB.split(&mut rcc.apb2);
         let irpin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
 
+        // PWM
+        let mut afio = device.AFIO.constrain(&mut rcc.apb2);
+        let irled = gpiob.pb9.into_alternate_push_pull(&mut gpiob.crh);
+
+        let mut c4: Pwm<TIM4, C4> = device.TIM4.pwm(
+            PwmChannels(irled),
+            &mut afio.mapr,
+            38.khz(),
+            clocks,
+            &mut rcc.apb1,
+        );
+        // Set the duty cycle of channel 0 to 50%
+        c4.set_duty(c4.get_max_duty() / 2);
+        c4.disable();
+
+
+
         init::LateResources {
             TIMER_MS: timer_ms,
             IRPIN: irpin,
+            PWM: c4,
             USB_DEV: usb_dev,
             SERIAL: serial,
             SERIAL_RECV_BUF: Default::default(),
@@ -114,7 +150,7 @@ const APP: () = {
 
     #[interrupt(
         spawn = [send_reply],
-        resources = [TIMER_MS, IRPIN, BLIP],
+        resources = [TIMER_MS, IRPIN, BLIP, PWM],
     )]
     fn TIM2() {
         static mut TS: u32 = 0;
@@ -123,6 +159,7 @@ const APP: () = {
         resources.TIMER_MS.clear_update_interrupt_flag();
 
         let blip = &mut resources.BLIP;
+        let pwm = &mut resources.PWM;
 
         match blip.state {
             blip::State::Idle => {}
@@ -133,6 +170,14 @@ const APP: () = {
                     }
 
                     blip.reset();
+                }
+            }
+            blip::State::IrSend => {
+
+                if blip.irsend(*TS) {
+                    pwm.enable();
+                } else {
+                    pwm.disable();
                 }
             }
         }
@@ -214,6 +259,19 @@ fn usb_poll<B: bus::UsbBus>(
             }
             Command::CaptureProtocol(id) => {
                 hprintln!("Capture protocol not implemented {}", id).unwrap();
+            }
+
+            Command::RemoteControlSend(cmd) => {
+                hprintln!("irsend").unwrap();
+                usb_send_reply(serial, &Reply::Ok);
+
+                let neccmd = NecCommand {
+                    addr: cmd.addr as u8,
+                    cmd: cmd.cmd as u8,
+                };
+
+                blip.sender.init(neccmd);
+                blip.state = blip::State::IrSend;
             }
         }
         Err(_) => {},

@@ -1,39 +1,55 @@
 use common::{Reply, RawData};
-use infrared::{Receiver, ReceiverState};
+use infrared::prelude::*;
 use infrared::trace::{TraceReceiver};
+use infrared::nec::{NecTransmitter, };
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum State {
     Idle,
     CaptureRaw,
+    IrSend,
 }
 
 pub struct Blip {
     pub state: State,
     pub tracer: TraceReceiver,
+    pub sender: NecTransmitter,
     pub samplerate: u32,
 }
 
 impl Blip {
     pub fn new(samplerate: u32) -> Self {
+
+        let per: u32 = (1 * 1000) / (samplerate / 1000);
+
+
         Blip {
             state: State::Idle,
             tracer: TraceReceiver::new(samplerate, 1000),
+            sender: NecTransmitter::new(per),
             samplerate,
         }
     }
 
     pub fn sample(&mut self, edge: bool, ts: u32) -> Option<Reply> {
-
         if let ReceiverState::Done(()) = self.tracer.sample(edge, ts) {
             return Some(traceresult_to_reply(self.samplerate, self.tracer.data()));
         }
-
         None
     }
 
     pub fn reset(&mut self) {
         self.tracer.reset();
+    }
+
+    pub fn irsend(&mut self, samplenum: u32) -> bool {
+
+        let state = self.sender.step(samplenum);
+        match state {
+            TransmitterState::Idle => false,
+            TransmitterState::Transmit(send) => send,
+            TransmitterState::Err => false,
+        }
     }
 }
 

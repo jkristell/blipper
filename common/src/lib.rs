@@ -8,6 +8,7 @@ pub enum Command {
     Info,
     CaptureProtocol(u32),
     CaptureRaw,
+    RemoteControlSend(RemoteControlCmd),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -30,6 +31,13 @@ pub struct GenericRemote {
     pub addr: u16,
     pub cmd: u16,
 }
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct RemoteControlCmd {
+    pub addr: u16,
+    pub cmd: u16,
+}
+
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Info {

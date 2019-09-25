@@ -5,6 +5,8 @@ use std::io::ErrorKind::InvalidInput;
 use std::path::Path;
 use vcd::{self, SimulationCommand, TimescaleUnit, Value};
 
+use log::info;
+
 pub struct BlipperVcd<'a> {
     wires: Vec<vcd::IdCode>,
     writer: vcd::Writer<'a>,
@@ -127,3 +129,40 @@ pub fn vcdfile_to_vec(path: &Path) -> io::Result<(u32, Vec<(u64, bool)>)> {
 
     Ok((samplerate, res))
 }
+
+pub fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
+    use infrared::{rc5::Rc5Receiver};
+    use infrared::prelude::*;
+    use std::convert::TryFrom;
+
+    let (samplerate, vcdvec) = vcdfile_to_vec(path)?;
+
+    info!("Replay of vcdfile, samplerate = {}", samplerate);
+
+    let vcditer = vcdvec
+        .into_iter()
+        .map(|(t, v)| (u32::try_from(t).unwrap(), v));
+
+    let sr = 40_000;
+    let mut recv = Rc5Receiver::new(sr);
+
+    if debug {
+        println!("T\tRc5\tRising\tDelta\t\tState");
+    }
+    for (t, value) in vcditer {
+        let state = recv.sample(value, t);
+
+        if let ReceiverState::Done(ref cmd) = state {
+            println!("Cmd: {:?}", cmd);
+            recv.reset();
+        }
+
+        if let ReceiverState::Error(err) = state {
+            println!("--Error: {:?}", err);
+            recv.reset();
+        }
+    }
+
+    Ok(())
+}
+
