@@ -1,0 +1,38 @@
+[package]
+name = "blipper-fw"
+version = "0.0.1"
+authors = ["Johan Kristell <johan@jott.se>"]
+edition = "2018"
+description = "Remote control application"
+repository = "https://github.com/jkristell/blipper"
+keywords = ["remote", "control"]
+categories = ["no-std", "embedded"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+stm32f1xx-hal = { version = "0.3", features = ["rt", "stm32f103" ] }
+cortex-m = "0.5"
+cortex-m-rt = { version = "0.6.10", features = ["device"] }
+panic-semihosting = "0.5.2"
+stm32-usbd = { version = "0.3.0", features = ["stm32f103xx"] }
+usb-device = "0.2.0"
+usbd-serial = "0.1.0"
+cortex-m-rtfm = "0.4.3"
+cortex-m-semihosting = "0.3.4"
+embedded-hal = "0.2.3"
+infrared = { path = "../../infrared" }
+heapless = "0.5.1"
+postcard = "0.4.1"
+common = { path = "../common" }
+
+
+[profile.dev]
+opt-level = 1
+lto = true
+incremental = false
+
+[profile.release]
+lto = true
+incremental = false
+opt-level = "z"
+debug = true
