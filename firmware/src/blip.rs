@@ -1,7 +1,7 @@
 use common::{Reply, RawData};
 use infrared::prelude::*;
 use infrared::logging::LoggingReceiver;
-use infrared::nec::{NecTransmitter, };
+use infrared::nec::NecSamsungTransmitter;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum State {
@@ -13,7 +13,7 @@ pub enum State {
 pub struct Blip {
     pub state: State,
     pub tracer: LoggingReceiver,
-    pub sender: NecTransmitter,
+    pub sender: NecSamsungTransmitter,
     pub samplerate: u32,
 }
 
@@ -23,7 +23,7 @@ impl Blip {
         Blip {
             state: State::Idle,
             tracer: LoggingReceiver::new(samplerate, 1000),
-            sender: NecTransmitter::new(per),
+            sender: NecSamsungTransmitter::new(per),
             samplerate,
         }
     }
