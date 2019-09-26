@@ -46,34 +46,3 @@ pub fn command_capture_raw(link: &mut SerialLink,
     }
 }
 
-/*
-fn command_protocol(devpath: &PathBuf, id: u32) -> io::Result<()> {
-    use heapless::consts::U64;
-    use postcard::to_vec;
-
-    let mut port = serial_connect(devpath).expect("Failed to open serial");
-
-    // Send command to device
-    let req: heapless::Vec<u8, U64> = to_vec(&Command::CaptureProtocol(id)).unwrap();
-    port.write_all(&req).unwrap();
-
-    if serialpostcard::read_ok(&mut port).is_err() {
-        error!("Failed to read ok");
-    }
-
-    loop {
-        match serialpostcard::read_protocoldata(&mut port) {
-            Ok(genericremote) => {
-                info!("Protocol capture");
-                println!("{:?}", genericremote);
-            }
-            Err(_err) => {
-            }
-        }
-    }
-
-    Ok(())
-}
-*/
-
-

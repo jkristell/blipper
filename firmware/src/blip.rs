@@ -1,6 +1,6 @@
 use common::{Reply, RawData};
 use infrared::prelude::*;
-use infrared::trace::{TraceReceiver};
+use infrared::logging::LoggingReceiver;
 use infrared::nec::{NecTransmitter, };
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -12,20 +12,17 @@ pub enum State {
 
 pub struct Blip {
     pub state: State,
-    pub tracer: TraceReceiver,
+    pub tracer: LoggingReceiver,
     pub sender: NecTransmitter,
     pub samplerate: u32,
 }
 
 impl Blip {
     pub fn new(samplerate: u32) -> Self {
-
         let per: u32 = (1 * 1000) / (samplerate / 1000);
-
-
         Blip {
             state: State::Idle,
-            tracer: TraceReceiver::new(samplerate, 1000),
+            tracer: LoggingReceiver::new(samplerate, 1000),
             sender: NecTransmitter::new(per),
             samplerate,
         }

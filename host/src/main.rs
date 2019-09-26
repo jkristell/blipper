@@ -20,10 +20,8 @@ struct Opt {
     /// Serial Device. Defaults to /dev/ttyACM0
     #[structopt(long = "device", parse(from_os_str))]
     serial: Option<PathBuf>,
-
     #[structopt(short, long)]
     debug: bool,
-
     #[structopt(subcommand)]
     cmd: CliCommand,
 }
@@ -41,8 +39,6 @@ enum CliCommand {
     /// Transmit
     Transmit { protocol: u32, addr: u32, cmd: u32 },
 }
-
-
 
 fn main() -> io::Result<()> {
     let opt = Opt::from_args();
@@ -68,15 +64,12 @@ fn main() -> io::Result<()> {
         }
         CliCommand::Capture { path } => {
             let mut link = SerialLink::new(&devpath);
-
             capture::command_capture_raw(&mut link, path)
         },
         CliCommand::Protocol { id: _ } => {
             Ok(())
-            //command_protocol(&devpath, id)
         },
         CliCommand::Transmit { protocol, addr, cmd } => {
-
             let mut link = SerialLink::new(&devpath);
             irsend::transmit(&mut link, protocol, addr, cmd)
         },
