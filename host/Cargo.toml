@@ -11,6 +11,7 @@ structopt = "0.3"
 heapless = "0.5.1"
 postcard = "0.4.1"
 common = { path = "../common" }
-infrared = { version = "0.4", features = ["protocol-dev"]}
+infrared = { version = "0.4.1", features = ["protocol-dev"]}
+# infrared = { path = "../../infrared", features = ["protocol-dev"]}
 log = "0.4.8"
 femme = "1.2.0"

@@ -34,8 +34,9 @@ pub struct GenericRemote {
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct RemoteControlCmd {
+    pub txid: u8,
     pub addr: u16,
-    pub cmd: u16,
+    pub cmd: u8,
 }
 
 

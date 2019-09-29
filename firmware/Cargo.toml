@@ -20,7 +20,8 @@ usbd-serial = "0.1.0"
 cortex-m-rtfm = "0.4.3"
 cortex-m-semihosting = "0.3.4"
 embedded-hal = "0.2.3"
-infrared = "0.4"
+infrared = "0.4.1"
+#infrared = {path = "../../infrared"}
 heapless = "0.5.1"
 postcard = "0.4.1"
 common = { path = "../common" }

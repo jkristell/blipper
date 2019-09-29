@@ -28,8 +28,6 @@ use postcard::{to_vec, from_bytes};
 use common::{Reply, Command, Info};
 use stm32f1xx_hal::pwm::{Pwm, C4, Pins};
 use stm32f1xx_hal::gpio::{Alternate, PushPull};
-use infrared::Transmitter;
-use infrared::nec::NecCommand;
 
 mod blip;
 
@@ -257,12 +255,8 @@ fn usb_poll<B: bus::UsbBus>(
                 hprintln!("irsend").unwrap();
                 usb_send_reply(serial, &Reply::Ok);
 
-                let neccmd = NecCommand {
-                    addr: cmd.addr as u8,
-                    cmd: cmd.cmd as u8,
-                };
+                blip.txers.load(cmd.txid, cmd.addr, cmd.cmd);
 
-                blip.sender.load(neccmd);
                 blip.state = blip::State::IrSend;
             }
         }
