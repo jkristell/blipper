@@ -15,3 +15,4 @@ common = { path = "../common" }
 infrared = { path = "../../infrared", features = ["protocol-dev", "embedded-hal"]}
 log = "0.4.8"
 femme = "1.2.0"
+libblipperhost = { path = "../libblipperhost" }

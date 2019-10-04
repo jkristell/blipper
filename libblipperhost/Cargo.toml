@@ -1,0 +1,11 @@
+[package]
+name = "libblipperhost"
+version = "0.1.0"
+authors = ["Johan Kristell <johan@jott.se>"]
+edition = "2018"
+
+[dependencies]
+serialport = "3.3.0"
+heapless = "0.5.1"
+postcard = "0.4.1"
+common = { path = "../common" }

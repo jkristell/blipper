@@ -1,0 +1,14 @@
+[package]
+name = "blipper-host-gtk"
+version = "0.1.0"
+authors = ["Johan Kristell <johan@jott.se>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+gio = "0.7.0"
+gtk = {version = "0.7.0", features = ["v3_22"]}
+infrared = {path = "../../infrared"}
+libblipperhost = {path = "../libblipperhost"}
+common = {path = "../common"}

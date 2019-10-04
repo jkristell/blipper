@@ -31,6 +31,13 @@ pub struct GenericRemote {
     pub addr: u16,
     pub cmd: u16,
 }
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub enum Protocol {
+    Nec,
+    NecSamsung,
+    Rc5,
+    Rc6,
+}
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct RemoteControlCmd {
@@ -39,9 +46,10 @@ pub struct RemoteControlCmd {
     pub cmd: u8,
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Info {
     pub version: u32,
+    /// Bitfield of transmitters
+    pub transmitters: u32,
 }
 

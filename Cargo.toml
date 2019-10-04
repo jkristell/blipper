@@ -16,5 +16,9 @@ license = "MIT OR Apache-2.0"
 members = [
     "common",
     "host",
-    "firmware",
+    "libblipperhost",
+    "gui",
+]
+exclude = [
+    "firmware"
 ]

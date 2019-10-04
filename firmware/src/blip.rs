@@ -1,7 +1,7 @@
 use common::{Reply, RawData};
 use infrared::prelude::*;
 use infrared::logging::LoggingReceiver;
-use infrared::nec::{NecSamsungTransmitter, NecCommand};
+use infrared::nec::{NecTransmitter, NecSamsungTransmitter, NecCommand};
 use infrared::rc5::{Rc5Transmitter, Rc5Command};
 use embedded_hal::PwmPin;
 
@@ -13,6 +13,7 @@ pub enum State {
 }
 
 pub struct Txers {
+    nec: NecTransmitter,
     nes: NecSamsungTransmitter,
     rc5: Rc5Transmitter,
     active: u8,
@@ -26,6 +27,7 @@ impl Txers {
         let period: u32 = (1 * 1000) / (samplerate / 1000);
 
         Self {
+            nec: NecTransmitter::new(period),
             nes: NecSamsungTransmitter::new(period),
             rc5: Rc5Transmitter::new_for_samplerate(samplerate),
             active: 0,
@@ -38,15 +40,17 @@ impl Txers {
 
         match tid {
             1 => self.nes.load(NecCommand { addr: addr as u8, cmd: cmd }),
-            2 => self.rc5.load(Rc5Command::new(addr as u8, cmd, false)),
+            2 => self.nes.load(NecCommand { addr: addr as u8, cmd: cmd }),
+            3 => self.rc5.load(Rc5Command::new(addr as u8, cmd, false)),
             _ => (),
         }
     }
 
     fn step<PWM: PwmPin<Duty=DUTY>, DUTY>(&mut self, sample: u32, pwm: &mut PWM) -> TransmitterState {
         match self.active {
-            1 => self.nes.pwmstep(sample, pwm),
-            2 => self.rc5.pwmstep(sample, pwm),
+            1 => self.nec.pwmstep(sample, pwm),
+            2 => self.nes.pwmstep(sample, pwm),
+            3 => self.rc5.pwmstep(sample, pwm),
             _ => TransmitterState::Idle,
         }
     }
