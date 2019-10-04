@@ -3,6 +3,7 @@ use infrared::prelude::*;
 use infrared::logging::LoggingReceiver;
 use infrared::nec::{NecSamsungTransmitter, NecCommand};
 use infrared::rc5::{Rc5Transmitter, Rc5Command};
+use embedded_hal::PwmPin;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum State {
@@ -42,10 +43,10 @@ impl Txers {
         }
     }
 
-    fn step(&mut self, sample: u32) -> TransmitterState {
+    fn step<PWM: PwmPin<Duty=DUTY>, DUTY>(&mut self, sample: u32, pwm: &mut PWM) -> TransmitterState {
         match self.active {
-            1 => self.nes.step(sample),
-            2 => self.rc5.step(sample),
+            1 => self.nes.pwmstep(sample, pwm),
+            2 => self.rc5.pwmstep(sample, pwm),
             _ => TransmitterState::Idle,
         }
     }
@@ -79,9 +80,9 @@ impl Blip {
         self.tracer.reset();
     }
 
-    pub fn irsend(&mut self, samplenum: u32) -> bool {
+    pub fn irsend<D, PWM: PwmPin<Duty=D>>(&mut self, samplenum: u32, pwm: &mut PWM) -> bool {
 
-        let state = self.txers.step(samplenum);
+        let state = self.txers.step(samplenum, pwm);
         match state {
             TransmitterState::Idle => false,
             TransmitterState::Transmit(send) => send,

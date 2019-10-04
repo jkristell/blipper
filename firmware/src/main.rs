@@ -7,6 +7,7 @@ use cortex_m::asm::delay;
 use cortex_m_semihosting::hprintln;
 use rtfm::app;
 
+/*
 use stm32f1xx_hal::{
     gpio::{gpiob::{PB8, PB9}, Floating, Input},
     prelude::*,
@@ -14,6 +15,22 @@ use stm32f1xx_hal::{
     device,
     stm32::TIM4,
 };
+
+use stm32f1xx_hal::pwm::{Pwm, C4, Pins};
+use stm32f1xx_hal::gpio::{Alternate, PushPull};
+*/
+use stm32f1xx_hal::{
+    prelude::*,
+    gpio::{gpiob::{PB8, PB9}, Floating, Input},
+    gpio::{Alternate, PushPull},
+    pac,
+    pwm::{Pins, Pwm, C4},
+    stm32::{interrupt, TIM4},
+    device,
+    timer::{self, Event, Timer},
+};
+
+
 
 use stm32_usbd::{UsbBus, UsbBusType};
 use usb_device::bus;
@@ -26,8 +43,6 @@ use heapless::{
 };
 use postcard::{to_vec, from_bytes};
 use common::{Reply, Command, Info};
-use stm32f1xx_hal::pwm::{Pwm, C4, Pins};
-use stm32f1xx_hal::gpio::{Alternate, PushPull};
 
 mod blip;
 
@@ -161,7 +176,6 @@ const APP: () = {
         resources.TIMER_MS.clear_update_interrupt_flag();
 
         let blip = &mut resources.BLIP;
-        let pwm = &mut resources.PWM;
 
         match blip.state {
             blip::State::Idle => {}
@@ -176,11 +190,7 @@ const APP: () = {
                 }
             }
             blip::State::IrSend => {
-                if blip.irsend(*TS) {
-                    pwm.enable();
-                } else {
-                    pwm.disable();
-                }
+                blip.irsend(*TS, resources.PWM);
             }
         }
 
