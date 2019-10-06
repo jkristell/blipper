@@ -251,7 +251,7 @@ fn usb_poll<B: bus::UsbBus>(
             Command::Info => {
                 let info: Info = Info {
                     version: VERSION,
-                    transmitters: 0b111,
+                    transmitters: blip::ENABLED_TRANSMITTERS,
                 };
                 usb_send_reply(serial, &Reply::Info {info});
             }

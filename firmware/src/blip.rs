@@ -1,9 +1,16 @@
-use common::{Reply, RawData};
+use common::{Reply, RawData, Protocol};
 use infrared::prelude::*;
 use infrared::logging::LoggingReceiver;
 use infrared::nec::{NecTransmitter, NecSamsungTransmitter, NecCommand};
 use infrared::rc5::{Rc5Transmitter, Rc5Command};
 use embedded_hal::PwmPin;
+
+const NEC_ID: u8 = Protocol::Nec as u8;
+const NES_ID: u8 = Protocol::NecSamsung as u8;
+const RC5_ID: u8 = Protocol::Rc5 as u8;
+const RC6_ID: u8 = Protocol::Rc6 as u8;
+
+pub const ENABLED_TRANSMITTERS: u32 = 1 << NEC_ID | 1 << NES_ID | 1 << RC5_ID;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum State {

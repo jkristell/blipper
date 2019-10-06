@@ -3,7 +3,7 @@ extern crate gtk;
 
 use gio::prelude::*;
 use gtk::prelude::*;
-use gtk::{ApplicationWindow, Builder, Button, ListStore, Grid, ComboBoxText, IconSize};
+use gtk::{ApplicationWindow, Builder, Button, ListStore, Grid, ComboBoxText, IconSize, Label};
 use gtk::GridExt;
 use std::env::args;
 
@@ -12,6 +12,8 @@ use infrared::remotecontrol::{StandardButton};
 use libblipperhost::link::SerialLink;
 use std::rc::Rc;
 use std::cell::RefCell;
+use crate::remotes::RemoteControlData;
+use std::error::Error;
 
 mod remotes;
 
@@ -22,9 +24,22 @@ struct BlipperGui {
 
     // Widgets
     remotecontrol_grid: Grid,
+    statusbar_label: Label,
+    info_label: Label,
 }
 
 impl BlipperGui {
+
+    fn new(remotes: Vec<RemoteControlData>, grid: Grid, statusbar_label: Label, info_label: Label) -> Self {
+        Self {
+            link: SerialLink::new(),
+            remotes: remotes,
+            selected: 0,
+            remotecontrol_grid: grid,
+            statusbar_label,
+            info_label,
+        }
+    }
 
     fn send_command(&mut self, cmd: u8) {
 
@@ -32,7 +47,7 @@ impl BlipperGui {
         let txid = self.selected as u8;
 
         let cmd = common::RemoteControlCmd {
-            txid,
+            txid: remote.protocol as u8,
             addr: remote.addr,
             cmd: cmd,
         };
@@ -71,6 +86,30 @@ impl BlipperGui {
         gui.remotecontrol_grid.remove_row(1);
         gui.remotecontrol_grid.attach(&button_grid, 0, 1, 1, 1);
     }
+
+    fn connect(self_rc: Rc<RefCell<BlipperGui>>) {
+        let mut gui = self_rc.borrow_mut();
+
+        let res = gui.link.connect("/dev/ttyACM0");
+        println!("connect res: {:?}", res);
+
+        match res {
+            Ok(_) => {
+                gui.statusbar_label.set_markup("Connected to <b>/dev/ttyACM0</b>");
+
+                gui.link.send_command(common::Command::Info);
+                let info = gui.link.reply_info();
+
+                if let Ok(info) = info {
+                    gui.info_label.set_markup(&format!("{:?}", info));
+                } else {
+                    println!("Failed to get info");
+                }
+            },
+            Err(err) => gui.statusbar_label.set_markup(&format!("<b>{}</b>", err.description())),
+        }
+
+    }
 }
 
 
@@ -78,11 +117,14 @@ fn build_ui(application: &gtk::Application) {
     let glade_src = include_str!("blipper.glade");
     let builder = Builder::new_from_string(glade_src);
 
-    let window: ApplicationWindow = builder.get_object("window1").expect("window");
-    window.set_application(Some(application));
+    let window: ApplicationWindow = builder.get_object("window1").unwrap();
+    let rc_combo: ComboBoxText = builder.get_object("rc_combo").unwrap();
+    let remotecontrol_grid: Grid = builder.get_object("remotecontrol_grid").unwrap();
+    let connect_button: Button = builder.get_object("connect_button").unwrap();
+    let statusbar_label: Label = builder.get_object("statusbar_label").unwrap();
+    let info_label: Label = builder.get_object("info_label").unwrap();
 
-    let rc_combo: ComboBoxText = builder.get_object("rc_combo").expect("rc_combo");
-    let remotecontrol_grid: Grid = builder.get_object("remotecontrol_grid").expect("transmit_grid");
+    window.set_application(Some(application));
 
     let model = ListStore::new(&[String::static_type(), gtk::Type::U32,]);
 
@@ -92,17 +134,14 @@ fn build_ui(application: &gtk::Application) {
         model.set(&model.append(), &[0, 1], &[&remote.model, &(idx as u32)]);
     }
 
-    let blippergui = Rc::new(RefCell::new(BlipperGui {
-        link: SerialLink::new("/dev/ttyACM0"),
-        remotes: remotes,
-        selected: 0,
-        remotecontrol_grid,
-    }));
+    let blippergui = Rc::new(RefCell::new( BlipperGui::new(remotes, remotecontrol_grid, statusbar_label, info_label) ));
 
     rc_combo.set_model(Some(&model));
     rc_combo.set_active_iter(model.get_iter_first().as_ref());
 
     BlipperGui::update_button_grid(blippergui.clone());
+
+    let blippergui1 = blippergui.clone();
 
     rc_combo.connect_changed(move |combo| {
         let active_id = combo.get_active_iter().unwrap();
@@ -110,11 +149,18 @@ fn build_ui(application: &gtk::Application) {
 
         // Update the selected remote and update view
         {
-            let mut bgui = blippergui.borrow_mut();
+            let mut bgui = blippergui1.borrow_mut();
             bgui.selected = value as usize;
         }
 
-        BlipperGui::update_button_grid(blippergui.clone());
+        BlipperGui::update_button_grid(blippergui1.clone());
+    });
+
+    let blippergui_clone = blippergui.clone();
+    connect_button.connect_clicked(move |_button| {
+
+        BlipperGui::connect(blippergui_clone.clone());
+
     });
 
     window.show_all();

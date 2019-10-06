@@ -2,31 +2,30 @@ use common::{RawData, Reply, Command};
 use postcard::{from_bytes, to_vec};
 use serialport::{SerialPort, SerialPortSettings};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 use heapless::consts::U64;
 
 pub struct SerialLink {
-    path: PathBuf,
     port: Option<Box<dyn SerialPort>>,
 }
 
 impl SerialLink {
 
-    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+    pub fn new() -> Self {
         SerialLink {
-            path: path.as_ref().to_path_buf(),
             port: None,
         }
     }
 
-    pub fn connect(&mut self) -> Result<(), serialport::Error> {
+    pub fn connect<P: AsRef<Path>>(&mut self, path: P) -> Result<(), serialport::Error> {
 
         let settings = SerialPortSettings {
             baud_rate: 115_200,
             ..Default::default()
         };
 
-        let port = serialport::open_with_settings(&self.path, &settings)?;
+        let path = path.as_ref();
+        let port = serialport::open_with_settings(path, &settings)?;
         self.port.replace(port);
 
         Ok(())
@@ -53,6 +52,23 @@ impl SerialLink {
 
         Err(io::ErrorKind::InvalidData.into())
     }
+
+    pub fn reply_info(&mut self) -> io::Result<common::Info> {
+        let mut recvbuf = [0; 1024];
+
+        match self.port.as_mut().ok_or(io::ErrorKind::NotConnected)?.read(&mut recvbuf[..]) {
+            Ok(_readlen) => {}
+            Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
+            Err(e) => eprintln!("{:?}", e),
+        }
+
+        if let Ok(Reply::Info { info }) = from_bytes::<Reply>(&recvbuf) {
+            return Ok(info)
+        }
+
+        Err(io::ErrorKind::InvalidData.into())
+    }
+
 
     pub fn read_capturerawdata(&mut self) -> io::Result<RawData> {
         let mut recvbuf = [0; 1024];
