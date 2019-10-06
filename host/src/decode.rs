@@ -28,6 +28,8 @@ pub fn command_decode(link: &mut SerialLink) -> io::Result<()> {
                 let v = rawdata.data.concat();
                 let s = &v[0..rawdata.len as usize];
 
+                println!("{:?}", v);
+
                 let mut edge = false;
                 let mut t: u32 = 0;
 

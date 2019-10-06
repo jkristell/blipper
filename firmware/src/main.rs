@@ -151,7 +151,7 @@ const APP: () = {
 
     #[idle]
     fn idle() -> ! {
-        hprintln!("Ready!").unwrap();
+        let _ = hprintln!("Ready!");
         loop {
             continue;
         }
@@ -223,20 +223,16 @@ fn usb_poll<B: bus::UsbBus>(
     serial: &mut SerialPort<'static, B>,
     buf: &mut Vec<u8, U64>,
     blip: &mut blip::Blip
-    //state: &mut BlipperState,
-    //samplerate: &mut u32,
 ) {
     if !usb_dev.poll(&mut [serial]) {
         return;
     }
 
-    let mut localbuf = [0u8; 32];
+    let mut tmpbuf = [0u8; 32];
 
-    match serial.read(&mut localbuf) {
+    match serial.read(&mut tmpbuf) {
         Ok(count) if count > 0 => {
-            for c in &localbuf {
-                buf.push(*c).unwrap();
-            }
+            let _ = buf.extend_from_slice(&tmpbuf);
         }
         _ => {}
     }
@@ -244,7 +240,7 @@ fn usb_poll<B: bus::UsbBus>(
     match from_bytes::<Command>(&buf) {
         Ok(cmd) => match cmd {
             Command::Idle => {
-                hprintln!("cmd idle").unwrap();
+                let _ = hprintln!("cmd idle");
                 blip.state = blip::State::Idle;
                 usb_send_reply(serial, &Reply::Ok);
             }
@@ -256,14 +252,14 @@ fn usb_poll<B: bus::UsbBus>(
                 usb_send_reply(serial, &Reply::Info {info});
             }
             Command::CaptureRaw => {
-                hprintln!("cap raw").unwrap();
+                let _ = hprintln!("cap raw");
                 blip.state = blip::State::CaptureRaw;
             }
             Command::CaptureProtocol(id) => {
-                hprintln!("Not implemented: {}", id).unwrap();
+                let _ = hprintln!("Not implemented: {}", id);
             }
             Command::RemoteControlSend(cmd) => {
-                hprintln!("irsend").unwrap();
+                let _ = hprintln!("sending");
                 usb_send_reply(serial, &Reply::Ok);
 
                 blip.txers.load(cmd.txid, cmd.addr, cmd.cmd);
@@ -276,6 +272,7 @@ fn usb_poll<B: bus::UsbBus>(
 
     buf.clear();
 }
+
 
 
 fn usb_write<B: bus::UsbBus>(
