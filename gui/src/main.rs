@@ -1,25 +1,26 @@
-extern crate gio;
-extern crate gtk;
+use std::env::args;
+use std::rc::Rc;
+use std::cell::RefCell;
+use std::error::Error;
 
 use gio::prelude::*;
 use gtk::prelude::*;
 use gtk::{ApplicationWindow, Builder, Button, ListStore, Grid, ComboBoxText, IconSize, Label};
 use gtk::GridExt;
-use std::env::args;
 
-use infrared::remotecontrol::{StandardButton};
+
+use infrared_remotes::{StandardButton};
 
 use libblipperhost::link::SerialLink;
-use std::rc::Rc;
-use std::cell::RefCell;
-use crate::remotes::RemoteControlData;
-use std::error::Error;
+use infrared_remotes::extra::RemoteControlData;
+
 
 mod remotes;
+//use crate::remotes::RemoteControlData;
 
 struct BlipperGui {
     link: SerialLink,
-    remotes: Vec<remotes::RemoteControlData>,
+    remotes: Vec<RemoteControlData>,
     selected: usize,
 
     // Widgets
@@ -33,7 +34,7 @@ impl BlipperGui {
     fn new(remotes: Vec<RemoteControlData>, grid: Grid, statusbar_label: Label, info_label: Label) -> Self {
         Self {
             link: SerialLink::new(),
-            remotes: remotes,
+            remotes,
             selected: 0,
             remotecontrol_grid: grid,
             statusbar_label,
@@ -44,7 +45,6 @@ impl BlipperGui {
     fn send_command(&mut self, cmd: u8) {
 
         let remote = &self.remotes[self.selected];
-        let txid = self.selected as u8;
 
         let cmd = common::RemoteControlCmd {
             txid: remote.protocol as u8,
@@ -59,7 +59,6 @@ impl BlipperGui {
     fn update_button_grid(self_rc: Rc<RefCell<BlipperGui>>) {
 
         let gui = self_rc.borrow_mut();
-
 
         let button_grid = Grid::new();
         button_grid.set_column_homogeneous(true);
@@ -108,7 +107,6 @@ impl BlipperGui {
             },
             Err(err) => gui.statusbar_label.set_markup(&format!("<b>{}</b>", err.description())),
         }
-
     }
 }
 
@@ -134,7 +132,7 @@ fn build_ui(application: &gtk::Application) {
         model.set(&model.append(), &[0, 1], &[&remote.model, &(idx as u32)]);
     }
 
-    let blippergui = Rc::new(RefCell::new( BlipperGui::new(remotes, remotecontrol_grid, statusbar_label, info_label) ));
+    let blippergui = Rc::new(RefCell::new(BlipperGui::new(remotes, remotecontrol_grid, statusbar_label, info_label)));
 
     rc_combo.set_model(Some(&model));
     rc_combo.set_active_iter(model.get_iter_first().as_ref());
@@ -158,9 +156,7 @@ fn build_ui(application: &gtk::Application) {
 
     let blippergui_clone = blippergui.clone();
     connect_button.connect_clicked(move |_button| {
-
         BlipperGui::connect(blippergui_clone.clone());
-
     });
 
     window.show_all();
@@ -170,8 +166,7 @@ fn main() {
     let application = gtk::Application::new(
         Some("com.github.jkristell.blipper.gui"),
         Default::default(),
-    )
-        .expect("Initialization failed...");
+    ).expect("Initialization failed...");
 
     application.connect_activate(|app| {
         build_ui(app);
