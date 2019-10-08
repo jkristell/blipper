@@ -5,18 +5,16 @@ use std::error::Error;
 
 use gio::prelude::*;
 use gtk::prelude::*;
-use gtk::{ApplicationWindow, Builder, Button, ListStore, Grid, ComboBoxText, IconSize, Label};
+use gtk::{ApplicationWindow, Builder, Button, ListStore, Grid, ComboBoxText, IconSize, Label, Image};
 use gtk::GridExt;
 
+use gdk_pixbuf::Pixbuf;
 
 use infrared_remotes::{StandardButton};
 
 use libblipperhost::link::SerialLink;
-use infrared_remotes::extra::RemoteControlData;
+use infrared_remotes::std::RemoteControlData;
 
-
-mod remotes;
-//use crate::remotes::RemoteControlData;
 
 struct BlipperGui {
     link: SerialLink,
@@ -126,10 +124,12 @@ fn build_ui(application: &gtk::Application) {
 
     let model = ListStore::new(&[String::static_type(), gtk::Type::U32,]);
 
-    let remotes = remotes::create_remotes();
+    let remotes = infrared_remotes::std::remotes();
+        //remotes::create_remotes();
 
     for (idx, remote) in remotes.iter().enumerate() {
-        model.set(&model.append(), &[0, 1], &[&remote.model, &(idx as u32)]);
+        let text = format!("{} ({:?})", remote.model, remote.protocol);
+        model.set(&model.append(), &[0, 1], &[&text, &(idx as u32)]);
     }
 
     let blippergui = Rc::new(RefCell::new(BlipperGui::new(remotes, remotecontrol_grid, statusbar_label, info_label)));
@@ -176,11 +176,22 @@ fn main() {
 }
 
 fn button_from_standardbutton(standardbutton: StandardButton) -> Button {
-    let label = format!("{:?}", standardbutton);
 
     if let Some(name) = standardbutton_to_icon_name(standardbutton) {
-        return Button::new_from_icon_name(Some(name), IconSize::Button);
+
+        let pixbuf = Pixbuf::new_from_file_at_scale(&format!("icons/{}.svg", name),
+                                                    24,
+                                                    24,
+                                                    true).ok();
+        let image = Image::new();
+        image.set_from_pixbuf(pixbuf.as_ref());
+
+        let button = Button::new();
+        button.set_image(Some(&image));
+        return button;
     }
+
+    let label = format!("{:?}", standardbutton);
 
     let button = match standardbutton {
         StandardButton::One => Button::new_with_label("1"),
@@ -200,16 +211,65 @@ fn button_from_standardbutton(standardbutton: StandardButton) -> Button {
 
 fn standardbutton_to_icon_name(standardbutton: StandardButton) -> Option<&'static str> {
     use StandardButton::*;
-    match standardbutton {
-        Play => Some("media-playback-start"),
-        Stop => Some("media-playback-stop"),
-        Paus => Some("media-playback-pause"),
-        ChannelListNext => Some("go-next"),
-        ChannelListPrev => Some("go-previous"),
-        VolumeDown => Some("audio-volume-low"),
-        VolumeUp => Some("audio-volume-high"),
+
+    return match standardbutton {
+        Power => Some("power_settings_new"),
+        Setup => Some("build"),
+        Source => Some("input"),
+        Up => Some("arrow_drop_up"),
+        Down => Some("arrow_drop_down"),
+        Left => Some("arrow_left"),
+        Right => Some("arrow_right"),
+        Time => Some("watch_later"),
+        Return => Some("keyboard_return"),
+        Stop => Some("stop"),
+        Rewind => Some("fast_rewind"),
+        Play => Some("play_arrow"),
+        Paus => Some("pause"),
+        Play_Paus => Some("play_arrow"),
+        Forward => Some("fast_forward"),
+
+        Shuffle | Random => Some("shuffle"),
+        Repeat => Some("repeat"),
+
+        Next => Some("skip_next"),
+        Prev => Some("skip_previous"),
+
+        ChannelListNext => Some("keyboard_arrow_right"),
+        ChannelListPrev => Some("keyboard_arrow_left"),
+
+        VolumeUp => Some("volume_up"),
+        VolumeDown => Some("volume_down"),
+        VolumeMute | Mute => Some("volume_mute"),
+        Eq => Some("graphic_eq"),
+        Subtitle => Some("subtitles"),
+        Info => Some("info"),
+
 
         _ => None,
+        /*
+        Teletext => {}
+        ChannelPrev => {}
+        ChannelList => {}
+        Tools => {}
+        Return => {}
+        Exit => {}
+        Enter => {}
+        Red => {}
+        Green => {}
+        Yellow => {}
+        Blue => {}
+        Emanual => {}
+        PictureSize => {}
+        Mode => {}
+        U_SD => {}
+        Plus => {}
+        Minus => {}
+        Repeat => {}
+        PitchReset => {}
+        PitchPlus => {}
+        PitchMinus => {}
+        Prog => {}
+        */
     }
-
 }

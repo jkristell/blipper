@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 gio = "0.7.0"
 gtk = {version = "0.7.0", features = ["v3_22"]}
+gdk-pixbuf = "0.7.0"
 infrared = {path = "../../infrared"}
 infrared-remotes = { path = "../../infrared-remotes" }
 libblipperhost = {path = "../libblipperhost"}
