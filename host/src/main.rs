@@ -6,13 +6,15 @@ use structopt::StructOpt;
 //use log::{error, info};
 
 mod blippervcd;
-mod link;
+//mod link;
 mod capture;
 mod decode;
 mod irsend;
 
-use link::SerialLink;
-
+//use link::SerialLink;
+use libblipperhost::{
+    SerialLink,
+};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
@@ -55,7 +57,8 @@ fn main() -> io::Result<()> {
 
     match opt.cmd {
         CliCommand::Decode {} => {
-            let mut link = SerialLink::new(&devpath);
+            let mut link = SerialLink::new();
+            link.connect(&devpath)?;
             decode::command_decode(&mut link)
         },
         CliCommand::PlaybackVcd { path } => {
@@ -63,14 +66,16 @@ fn main() -> io::Result<()> {
             blippervcd::play_saved_vcd(&path, opt.debug)
         }
         CliCommand::Capture { path } => {
-            let mut link = SerialLink::new(&devpath);
+            let mut link = SerialLink::new();
+            link.connect(&devpath)?;
             capture::command_capture_raw(&mut link, path)
         },
         CliCommand::Protocol { .. } => {
             Ok(())
         },
         CliCommand::Transmit { protocol, addr, cmd } => {
-            let mut link = SerialLink::new(&devpath);
+            let mut link = SerialLink::new();
+            link.connect(&devpath)?;
             irsend::transmit(&mut link, protocol, addr, cmd)
         },
     }

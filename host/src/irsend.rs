@@ -1,7 +1,7 @@
 use std::io;
 use log::info;
 use common::{Command, RemoteControlCmd};
-use crate::link::SerialLink;
+use libblipperhost::SerialLink;
 
 pub fn transmit(link: &mut SerialLink,
                 protocol: u32,
@@ -15,11 +15,14 @@ pub fn transmit(link: &mut SerialLink,
         cmd: cmd as u8
     };
 
-    info!("Irsend");
+    info!(
+        "Irsend: {:?}",
+        rc_cmd,
+    );
 
     link.send_command(Command::RemoteControlSend(rc_cmd))?;
-    link.reply_ok()?;
 
+    link.reply_ok()?;
     info!("Got ok");
 
     Ok(())

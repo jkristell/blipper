@@ -8,6 +8,7 @@ use embedded_hal::PwmPin;
 const NEC_ID: u8 = Protocol::Nec as u8;
 const NES_ID: u8 = Protocol::NecSamsung as u8;
 const RC5_ID: u8 = Protocol::Rc5 as u8;
+#[allow(dead_code)]
 const RC6_ID: u8 = Protocol::Rc6 as u8;
 
 pub const ENABLED_TRANSMITTERS: u32 = 1 << NEC_ID | 1 << NES_ID | 1 << RC5_ID;

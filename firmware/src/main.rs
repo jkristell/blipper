@@ -7,27 +7,14 @@ use cortex_m::asm::delay;
 use cortex_m_semihosting::hprintln;
 use rtfm::app;
 
-/*
-use stm32f1xx_hal::{
-    gpio::{gpiob::{PB8, PB9}, Floating, Input},
-    prelude::*,
-    timer::{self, Timer},
-    device,
-    stm32::TIM4,
-};
-
-use stm32f1xx_hal::pwm::{Pwm, C4, Pins};
-use stm32f1xx_hal::gpio::{Alternate, PushPull};
-*/
 use stm32f1xx_hal::{
     prelude::*,
     gpio::{gpiob::{PB8, PB9}, Floating, Input},
     gpio::{Alternate, PushPull},
-    pac,
     pwm::{Pins, Pwm, C4},
-    stm32::{interrupt, TIM4},
+    stm32::{TIM4},
     device,
-    timer::{self, Event, Timer},
+    timer::{self, Timer},
 };
 
 
@@ -249,10 +236,11 @@ fn usb_poll<B: bus::UsbBus>(
                     version: VERSION,
                     transmitters: blip::ENABLED_TRANSMITTERS,
                 };
+                let _ = hprintln!("info");
                 usb_send_reply(serial, &Reply::Info {info});
             }
             Command::CaptureRaw => {
-                let _ = hprintln!("cap raw");
+                let _ = hprintln!("State: capture");
                 blip.state = blip::State::CaptureRaw;
             }
             Command::CaptureProtocol(id) => {

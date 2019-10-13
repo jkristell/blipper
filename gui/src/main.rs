@@ -2,45 +2,129 @@ use std::env::args;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::error::Error;
+use std::sync::{Arc, Mutex};
+use std::{thread, time, io};
 
+use glib;
 use gio::prelude::*;
 use gtk::prelude::*;
-use gtk::{ApplicationWindow, Builder, Button, ListStore, Grid, ComboBoxText, IconSize, Label, Image};
+use gtk::{ApplicationWindow, Builder, Button, ListStore, Grid, ComboBoxText, Label, Image};
 use gtk::GridExt;
-
 use gdk_pixbuf::Pixbuf;
 
 use infrared_remotes::{StandardButton};
-
-use libblipperhost::link::SerialLink;
 use infrared_remotes::std::RemoteControlData;
+
+use libblipperhost::{
+    link::SerialLink,
+    decoder::Decoder,
+};
+use libblipperhost::decoder::DecodedButton;
+
+
+struct TransmitPanel {
+    rcselect: ComboBoxText,
+    grid: Grid,
+}
+
+struct InfoPanel {
+    version: Label,
+    protocols: Label,
+}
+
+struct DecoderPanel {
+    start: Button,
+    protocol: Label,
+    address: Label,
+    command: Label,
+}
 
 
 struct BlipperGui {
-    link: SerialLink,
+    //link: SerialLink,
+    arclink: Arc<Mutex<SerialLink>>,
+
     remotes: Vec<RemoteControlData>,
     selected: usize,
 
     // Widgets
-    remotecontrol_grid: Grid,
     statusbar_label: Label,
-    info_label: Label,
+
+    transmit_panel: TransmitPanel,
+    info_panel: InfoPanel,
+    decoder_panel: DecoderPanel,
 }
+
 
 impl BlipperGui {
 
-    fn new(remotes: Vec<RemoteControlData>, grid: Grid, statusbar_label: Label, info_label: Label) -> Self {
-        Self {
-            link: SerialLink::new(),
+    fn new(remotes: Vec<RemoteControlData>,
+           statusbar_label: Label,
+           transmit_panel: TransmitPanel,
+           info_panel: InfoPanel,
+           decoder_panel: DecoderPanel,
+    ) -> Rc<RefCell<BlipperGui>> {
+
+        let blippergui = BlipperGui {
+            //link: SerialLink::new(),
+            arclink: Arc::new(Mutex::new(SerialLink::new())),
             remotes,
             selected: 0,
-            remotecontrol_grid: grid,
             statusbar_label,
-            info_label,
+            transmit_panel,
+            info_panel,
+            decoder_panel,
+        };
+
+        let model = ListStore::new(&[String::static_type(), gtk::Type::U32,]);
+        for (idx, remote) in blippergui.remotes.iter().enumerate() {
+            let text = format!("{} ({:?})", remote.model, remote.protocol);
+            model.set(&model.append(), &[0, 1], &[&text, &(idx as u32)]);
         }
+
+        {
+            let combo = &blippergui.transmit_panel.rcselect;
+            combo.set_model(Some(&model));
+            combo.set_active_iter(model.get_iter_first().as_ref());
+        }
+
+        // Create the refcelled version
+        let refcelled = Rc::new(RefCell::new(blippergui));
+
+        BlipperGui::update_button_grid(refcelled.clone());
+
+        // Setup the callbacks
+        let refcelled_clone = refcelled.clone();
+        {
+            let decoder_panel = &refcelled.borrow().decoder_panel;
+
+            decoder_panel.start.connect_clicked(move |_button| {
+                BlipperGui::capture_raw(refcelled_clone.clone());
+            });
+        }
+
+
+        {
+            let refcelled_clone = refcelled.clone();
+            let combo = &refcelled.borrow().transmit_panel.rcselect;
+            combo.connect_changed(move |combo| {
+                let active_id = combo.get_active_iter().unwrap();
+                let value: u32 = model.get_value(&active_id, 1).get().unwrap();
+
+                // Update the selected remote and update view
+                {
+                    let mut bgui = refcelled_clone.borrow_mut();
+                    bgui.selected = value as usize;
+                }
+
+                BlipperGui::update_button_grid(refcelled_clone.clone());
+            });
+        }
+
+        refcelled
     }
 
-    fn send_command(&mut self, cmd: u8) {
+    fn send_command(&mut self, cmd: u8) -> io::Result<()> {
 
         let remote = &self.remotes[self.selected];
 
@@ -51,7 +135,8 @@ impl BlipperGui {
         };
 
         println!("Sending command: {:?}", cmd);
-        self.link.send_command(common::Command::RemoteControlSend(cmd));
+
+        self.arclink.lock().unwrap().send_command(common::Command::RemoteControlSend(cmd))
     }
 
     fn update_button_grid(self_rc: Rc<RefCell<BlipperGui>>) {
@@ -66,42 +151,46 @@ impl BlipperGui {
 
         let mapping = &gui.remotes[gui.selected].mapping;
 
-        for (idx, (cmdid, standardbutton)) in mapping.iter().cloned().enumerate() {
+        for (i, (cmdid, standardbutton)) in mapping.iter().cloned().enumerate() {
 
             let button = button_from_standardbutton(standardbutton);
 
             let blippergui = self_rc.clone();
             button.connect_clicked(move |_| {
                 let mut bgui = blippergui.borrow_mut();
-                bgui.send_command(cmdid);
+                let _ = bgui.send_command(cmdid);
             });
 
-            button_grid.attach(&button, (idx % 3) as i32, (idx / 3) as i32, 1, 1);
+            button_grid.attach(&button, (i % 3) as i32, (i / 3) as i32, 1, 1);
         }
 
         button_grid.show_all();
-        gui.remotecontrol_grid.remove_row(1);
-        gui.remotecontrol_grid.attach(&button_grid, 0, 1, 1, 1);
+        gui.transmit_panel.grid.remove_row(1);
+        gui.transmit_panel.grid.attach(&button_grid, 0, 1, 1, 1);
+    }
+
+    fn capture_raw(self_rc: Rc<RefCell<BlipperGui>>) {
+        let gui = self_rc.borrow_mut();
+        let mut link = gui.arclink.lock().unwrap();
+
+        link.send_command(common::Command::CaptureRaw)
+            .map_err(|_err| gui.statusbar_label.set_markup("Error Sending")).ok();
     }
 
     fn connect(self_rc: Rc<RefCell<BlipperGui>>) {
-        let mut gui = self_rc.borrow_mut();
+        let gui = self_rc.borrow_mut();
 
-        let res = gui.link.connect("/dev/ttyACM0");
+        let mut link = gui.arclink.lock().unwrap();
+
+        let res = link.connect("/dev/ttyACM0");
         println!("connect res: {:?}", res);
 
         match res {
             Ok(_) => {
                 gui.statusbar_label.set_markup("Connected to <b>/dev/ttyACM0</b>");
 
-                gui.link.send_command(common::Command::Info);
-                let info = gui.link.reply_info();
-
-                if let Ok(info) = info {
-                    gui.info_label.set_markup(&format!("{:?}", info));
-                } else {
-                    println!("Failed to get info");
-                }
+                link.send_command(common::Command::Info)
+                    .map_err(|_err| gui.statusbar_label.set_markup("Error Sending")).ok();
             },
             Err(err) => gui.statusbar_label.set_markup(&format!("<b>{}</b>", err.description())),
         }
@@ -114,49 +203,106 @@ fn build_ui(application: &gtk::Application) {
     let builder = Builder::new_from_string(glade_src);
 
     let window: ApplicationWindow = builder.get_object("window1").unwrap();
-    let rc_combo: ComboBoxText = builder.get_object("rc_combo").unwrap();
-    let remotecontrol_grid: Grid = builder.get_object("remotecontrol_grid").unwrap();
+
     let connect_button: Button = builder.get_object("connect_button").unwrap();
     let statusbar_label: Label = builder.get_object("statusbar_label").unwrap();
-    let info_label: Label = builder.get_object("info_label").unwrap();
+
+    let transmit_panel = TransmitPanel {
+        rcselect: builder.get_object("rc_combo").unwrap(),
+        grid: builder.get_object("remotecontrol_grid").unwrap(),
+    };
+
+    let info_panel = InfoPanel {
+        version: builder.get_object("info_version").unwrap(),
+        protocols: builder.get_object("info_protocols").unwrap(),
+    };
+
+    let decoder_panel = DecoderPanel {
+        start: builder.get_object("start_receiver_button").unwrap(),
+        protocol: builder.get_object("remote_protocol").unwrap(),
+        address: builder.get_object("remote_address").unwrap(),
+        command: builder.get_object("remote_command").unwrap(),
+    };
+
 
     window.set_application(Some(application));
 
-    let model = ListStore::new(&[String::static_type(), gtk::Type::U32,]);
 
     let remotes = infrared_remotes::std::remotes();
-        //remotes::create_remotes();
 
-    for (idx, remote) in remotes.iter().enumerate() {
-        let text = format!("{} ({:?})", remote.model, remote.protocol);
-        model.set(&model.append(), &[0, 1], &[&text, &(idx as u32)]);
-    }
 
-    let blippergui = Rc::new(RefCell::new(BlipperGui::new(remotes, remotecontrol_grid, statusbar_label, info_label)));
+    let blippergui_to_move = BlipperGui::new(remotes,
+                                             statusbar_label,
+                                             transmit_panel,
+                                             info_panel,
+                                             decoder_panel);
 
-    rc_combo.set_model(Some(&model));
-    rc_combo.set_active_iter(model.get_iter_first().as_ref());
+    let link_clone = blippergui_to_move.borrow().arclink.clone();
 
-    BlipperGui::update_button_grid(blippergui.clone());
-
-    let blippergui1 = blippergui.clone();
-
-    rc_combo.connect_changed(move |combo| {
-        let active_id = combo.get_active_iter().unwrap();
-        let value: u32 = model.get_value(&active_id, 1).get().unwrap();
-
-        // Update the selected remote and update view
-        {
-            let mut bgui = blippergui1.borrow_mut();
-            bgui.selected = value as usize;
-        }
-
-        BlipperGui::update_button_grid(blippergui1.clone());
-    });
+    let blippergui = blippergui_to_move; // Rc::new(RefCell::new(blippergui_to_move));
 
     let blippergui_clone = blippergui.clone();
     connect_button.connect_clicked(move |_button| {
         BlipperGui::connect(blippergui_clone.clone());
+    });
+
+
+    // Create a new sender/receiver pair with default priority
+    let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+
+    // Spawn the thread and move the sender in there
+    thread::spawn(move || {
+        loop {
+            thread::sleep(time::Duration::from_millis(10));
+
+            {
+                let mut link = link_clone.lock().unwrap();
+                let res = link.read_reply();
+
+                if let Ok(reply) = res {
+                    let _ = sender.send(reply);
+                }
+            }
+        }
+    });
+
+    // Attach the receiver to the default main context (None)
+    // and on every message update the label accordingly.
+    receiver.attach(None, move |reply: common::Reply| {
+
+        let samplerate = 40_000;
+        let mut decoder = Decoder::new(samplerate);
+
+        match reply {
+            common::Reply::CaptureRawData {rawdata} => {
+
+                let panel = &blippergui.borrow().decoder_panel;
+
+                let v = rawdata.data.concat();
+                let s = &v[0..rawdata.len as usize];
+                let maybe_cmd: Option<DecodedButton> = decoder.decode_data(s);
+
+                println!("{:?}", maybe_cmd);
+
+                if let Some(button) = maybe_cmd {
+                    panel.protocol.set_markup(&format!("<b>Protocol:</b> {:?}", button.protocol));
+                    panel.address.set_markup(&format!("<b>Address:</b> {:?}", button.address));
+                    panel.command.set_markup(&format!("<b>Command:</b> {:?}", button.command));
+                }
+            },
+            common::Reply::Info {info} => {
+                let info_panel = &blippergui.borrow().info_panel;
+
+                info_panel.version.set_markup(&format!("<b>Version:</b> {}", info.version));
+                info_panel.protocols.set_markup(&format!("<b>Protocols:</b> {}", info.transmitters));
+
+                println!("{:?}", info)
+            },
+            common::Reply::Ok => println!("Ok"),
+            _ => println!("Unhandled reply"),
+        }
+
+        glib::Continue(true)
     });
 
     window.show_all();
@@ -194,6 +340,7 @@ fn button_from_standardbutton(standardbutton: StandardButton) -> Button {
     let label = format!("{:?}", standardbutton);
 
     let button = match standardbutton {
+        StandardButton::Zero => Button::new_with_label("0"),
         StandardButton::One => Button::new_with_label("1"),
         StandardButton::Two => Button::new_with_label("2"),
         StandardButton::Three => Button::new_with_label("3"),

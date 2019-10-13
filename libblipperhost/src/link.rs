@@ -37,6 +37,41 @@ impl SerialLink {
             .write_all(&req)
     }
 
+    pub fn read_reply(&mut self) -> io::Result<common::Reply> {
+        let mut recvbuf = [0; 1024];
+        let mut offset = 0;
+
+        let port = self.port.as_mut().ok_or(io::ErrorKind::NotConnected)?;
+
+        loop {
+            match port.read(&mut recvbuf[offset..]) {
+                Ok(readlen) => { offset += readlen; }
+                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => break,
+                Err(e) => { eprintln!("{:?}", e); break; },
+            }
+
+            let reply = from_bytes::<Reply>(&recvbuf);
+
+            if let Ok(reply) = reply {
+                match reply {
+                    Reply::CaptureRawData {rawdata} => {
+                        let reply_size = 1 + std::mem::size_of::<RawData>();
+                        if offset < reply_size {
+                            continue
+                        } else {
+                            return Ok(Reply::CaptureRawData {rawdata});
+                        }
+                    }
+                    _ => return Ok(reply),
+                }
+            } else {
+                break;
+            }
+        }
+
+        Err(io::ErrorKind::InvalidData.into())
+    }
+
     pub fn reply_ok(&mut self) -> io::Result<()> {
         let mut recvbuf = [0; 1024];
 
@@ -53,6 +88,7 @@ impl SerialLink {
         Err(io::ErrorKind::InvalidData.into())
     }
 
+    /*
     pub fn reply_info(&mut self) -> io::Result<common::Info> {
         let mut recvbuf = [0; 1024];
 
@@ -90,5 +126,6 @@ impl SerialLink {
 
         Err(io::ErrorKind::InvalidData.into())
     }
+    */
 }
 

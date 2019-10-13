@@ -19,7 +19,10 @@ impl<'a> BlipperVcd<'a> {
         timescale: u32,
         wirenames: &[&str],
     ) -> io::Result<BlipperVcd<'a>> {
+
+
         let mut writer = vcd::Writer::new(w);
+
         let mut wires = Vec::new();
 
         // Write the header
