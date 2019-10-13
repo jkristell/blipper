@@ -1,4 +1,4 @@
-use infrared::Protocol;
+use infrared::ProtocolId;
 use infrared_remotes::std::RemoteControlData;
 use infrared::rc5::Rc5Receiver;
 use infrared::rc6::Rc6Receiver;
@@ -8,14 +8,14 @@ use infrared_remotes::RemoteControlCommand;
 
 #[derive(Debug)]
 pub struct DecodedButton {
-    pub protocol: Protocol,
+    pub protocol: ProtocolId,
     pub address: u16,
     pub command: u8,
     pub remotes: Vec<RemoteControlData>,
 }
 
 impl DecodedButton {
-    fn new(protocol: Protocol, address: u16, command: u8) -> Self {
+    fn new(protocol: ProtocolId, address: u16, command: u8) -> Self {
         Self {
             protocol,
             address,
@@ -82,7 +82,7 @@ where
 {
     match recv.sample(edge, t) {
         ReceiverState::Done(neccmd) => {
-            return Some(DecodedButton::new(RECEIVER::PROTOCOL,
+            return Some(DecodedButton::new(RECEIVER::PROTOCOL_ID,
                                            neccmd.address(),
                                            neccmd.command()))
         }

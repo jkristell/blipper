@@ -5,6 +5,8 @@ use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::{thread, time, io};
 
+use log::info;
+
 use glib;
 use gio::prelude::*;
 use gtk::prelude::*;
@@ -41,15 +43,10 @@ struct DecoderPanel {
 
 
 struct BlipperGui {
-    //link: SerialLink,
     arclink: Arc<Mutex<SerialLink>>,
-
     remotes: Vec<RemoteControlData>,
     selected: usize,
-
-    // Widgets
     statusbar_label: Label,
-
     transmit_panel: TransmitPanel,
     info_panel: InfoPanel,
     decoder_panel: DecoderPanel,
@@ -66,7 +63,6 @@ impl BlipperGui {
     ) -> Rc<RefCell<BlipperGui>> {
 
         let blippergui = BlipperGui {
-            //link: SerialLink::new(),
             arclink: Arc::new(Mutex::new(SerialLink::new())),
             remotes,
             selected: 0,
@@ -105,8 +101,9 @@ impl BlipperGui {
 
 
         {
-            let refcelled_clone = refcelled.clone();
             let combo = &refcelled.borrow().transmit_panel.rcselect;
+
+            let refcelled_clone = refcelled.clone();
             combo.connect_changed(move |combo| {
                 let active_id = combo.get_active_iter().unwrap();
                 let value: u32 = model.get_value(&active_id, 1).get().unwrap();
@@ -134,7 +131,7 @@ impl BlipperGui {
             cmd: cmd,
         };
 
-        println!("Sending command: {:?}", cmd);
+        info!("Sending command: {:?}", cmd);
 
         self.arclink.lock().unwrap().send_command(common::Command::RemoteControlSend(cmd))
     }
@@ -205,7 +202,7 @@ fn build_ui(application: &gtk::Application) {
     let window: ApplicationWindow = builder.get_object("window1").unwrap();
 
     let connect_button: Button = builder.get_object("connect_button").unwrap();
-    let statusbar_label: Label = builder.get_object("statusbar_label").unwrap();
+    let statusbar_label = builder.get_object("statusbar_label").unwrap();
 
     let transmit_panel = TransmitPanel {
         rcselect: builder.get_object("rc_combo").unwrap(),
@@ -224,28 +221,21 @@ fn build_ui(application: &gtk::Application) {
         command: builder.get_object("remote_command").unwrap(),
     };
 
-
     window.set_application(Some(application));
 
-
     let remotes = infrared_remotes::std::remotes();
+    let blippergui = BlipperGui::new(remotes,
+                                     statusbar_label,
+                                     transmit_panel,
+                                     info_panel,
+                                     decoder_panel);
 
-
-    let blippergui_to_move = BlipperGui::new(remotes,
-                                             statusbar_label,
-                                             transmit_panel,
-                                             info_panel,
-                                             decoder_panel);
-
-    let link_clone = blippergui_to_move.borrow().arclink.clone();
-
-    let blippergui = blippergui_to_move; // Rc::new(RefCell::new(blippergui_to_move));
+    let link_clone = blippergui.borrow().arclink.clone();
 
     let blippergui_clone = blippergui.clone();
     connect_button.connect_clicked(move |_button| {
         BlipperGui::connect(blippergui_clone.clone());
     });
-
 
     // Create a new sender/receiver pair with default priority
     let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
