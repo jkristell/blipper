@@ -1,10 +1,10 @@
 
-use infrared_remotes::nec::{SpecialForMp3, SamsungTv, };
-use infrared_remotes::{RemoteControl, StandardButton, DeviceType, RemoteControlCommand};
-use infrared_remotes::rc5::CdPlayer;
+use infrared::remotes::nec::{SpecialForMp3, SamsungTv, };
+use infrared::remotes::{RemoteControl, StandardButton, DeviceType, RemoteControlCommand};
+use infrared::remotes::rc5::CdPlayer;
+use infrared::remotes::std::RemoteControlData;
 
 use common::Protocol;
-use infrared_remotes::extra::RemoteControlData;
 use infrared::rc5::Rc5Receiver;
 
 

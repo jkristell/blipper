@@ -56,6 +56,11 @@ fn main() -> io::Result<()> {
     let devpath = opt.serial.unwrap_or_else(|| PathBuf::from("/dev/ttyACM0"));
 
     match opt.cmd {
+        CliCommand::Capture { path } => {
+            let mut link = SerialLink::new();
+            link.connect(&devpath)?;
+            capture::command_capture_raw(&mut link, path)
+        },
         CliCommand::Decode {} => {
             let mut link = SerialLink::new();
             link.connect(&devpath)?;
@@ -65,11 +70,6 @@ fn main() -> io::Result<()> {
             let path = path.unwrap_or_else(|| PathBuf::from("philips-bluray.vcd"));
             blippervcd::play_saved_vcd(&path, opt.debug)
         }
-        CliCommand::Capture { path } => {
-            let mut link = SerialLink::new();
-            link.connect(&devpath)?;
-            capture::command_capture_raw(&mut link, path)
-        },
         CliCommand::Protocol { .. } => {
             Ok(())
         },

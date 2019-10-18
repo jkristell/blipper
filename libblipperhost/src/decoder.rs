@@ -1,10 +1,14 @@
 use infrared::ProtocolId;
-use infrared_remotes::std::RemoteControlData;
 use infrared::rc5::Rc5Receiver;
 use infrared::rc6::Rc6Receiver;
 use infrared::nec::*;
 use infrared::prelude::*;
-use infrared_remotes::RemoteControlCommand;
+
+use infrared::remotes::{
+        std::RemoteControlData,
+        RemoteControlCommand,
+};
+
 
 #[derive(Debug)]
 pub struct DecodedButton {

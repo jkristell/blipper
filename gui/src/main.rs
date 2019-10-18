@@ -14,8 +14,8 @@ use gtk::{ApplicationWindow, Builder, Button, ListStore, Grid, ComboBoxText, Lab
 use gtk::GridExt;
 use gdk_pixbuf::Pixbuf;
 
-use infrared_remotes::{StandardButton};
-use infrared_remotes::std::RemoteControlData;
+use infrared::remotes::{StandardButton};
+use infrared::remotes::std::RemoteControlData;
 
 use libblipperhost::{
     link::SerialLink,
@@ -223,7 +223,7 @@ fn build_ui(application: &gtk::Application) {
 
     window.set_application(Some(application));
 
-    let remotes = infrared_remotes::std::remotes();
+    let remotes = infrared::remotes::std::remotes();
     let blippergui = BlipperGui::new(remotes,
                                      statusbar_label,
                                      transmit_panel,
