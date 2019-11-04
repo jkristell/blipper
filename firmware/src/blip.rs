@@ -47,8 +47,8 @@ impl Txers {
         self.active = tid;
 
         match tid {
-            1 => self.nes.load(NecCommand { addr: addr as u8, cmd: cmd }),
-            2 => self.nes.load(NecCommand { addr: addr as u8, cmd: cmd }),
+            1 => self.nes.load(NecCommand { addr: addr, cmd: cmd }),
+            2 => self.nes.load(NecCommand { addr: addr, cmd: cmd }),
             3 => self.rc5.load(Rc5Command::new(addr as u8, cmd, false)),
             _ => (),
         }

@@ -6,6 +6,7 @@ use std::path::Path;
 use vcd::{self, SimulationCommand, TimescaleUnit, Value};
 
 use log::info;
+use infrared::nec::Nec16Receiver;
 
 pub struct BlipperVcd<'a> {
     wires: Vec<vcd::IdCode>,
@@ -135,6 +136,9 @@ pub fn vcdfile_to_vec(path: &Path) -> io::Result<(u32, Vec<(u64, bool)>)> {
 
 pub fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
     use infrared::{rc5::Rc5Receiver};
+
+    use infrared::s36::S36Receiver;
+
     use infrared::prelude::*;
     use std::convert::TryFrom;
 
@@ -146,17 +150,17 @@ pub fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
         .into_iter()
         .map(|(t, v)| (u32::try_from(t).unwrap(), v));
 
-    let sr = 40_000;
-    let mut recv = Rc5Receiver::new(sr);
+    let mut recv = S36Receiver::new(samplerate);
 
-    if debug {
-        println!("T\tRc5\tRising\tDelta\t\tState");
-    }
+    println!("{:?}", recv.tolerances);
+
+
     for (t, value) in vcditer {
         let state = recv.sample(value, t);
+        //println!("State: {} {} {} {} {:?}", value, recv.delta, recv.prev_sampletime, t, recv.state);
 
         if let ReceiverState::Done(ref cmd) = state {
-            println!("Cmd: {:?}", cmd);
+            println!("Cmd: {:?} ", cmd);
             recv.reset();
         }
 

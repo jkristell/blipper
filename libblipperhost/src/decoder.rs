@@ -35,6 +35,7 @@ pub struct Decoder {
     rc6: Rc6Receiver,
     nec: NecReceiver,
     nes: NecSamsungReceiver,
+    n16: Nec16Receiver,
 }
 
 impl Decoder {
@@ -46,6 +47,7 @@ impl Decoder {
             rc6: Rc6Receiver::new(samplerate),
             nec: NecReceiver::new(samplerate),
             nes: NecSamsungReceiver::new(samplerate),
+            n16: Nec16Receiver::new(samplerate),
         }
     }
 
@@ -65,7 +67,7 @@ impl Decoder {
                 return Some(cmd);
             }
 
-            if let Some(cmd) = sample(&mut self.nec, rising, t) {
+            if let Some(cmd) = sample_nec(&mut self.nec, rising, t) {
                 return Some(cmd);
             }
 
@@ -85,10 +87,51 @@ where
     RECEIVER: infrared::Receiver<Cmd=CMD, Err=ERR>,
 {
     match recv.sample(edge, t) {
-        ReceiverState::Done(neccmd) => {
+        ReceiverState::Done(cmd) => {
+
+            recv.reset();
+
             return Some(DecodedButton::new(RECEIVER::PROTOCOL_ID,
-                                           neccmd.address(),
-                                           neccmd.command()))
+                                           cmd.address(),
+                                           cmd.command()))
+        }
+        ReceiverState::Error(_err) => {
+            recv.reset();
+        }
+        _ => {}
+    }
+
+    None
+}
+
+// Specialization for NEC
+fn sample_nec(recv: &mut NecReceiver, edge: bool, t: u32) -> Option<DecodedButton>
+{
+    match recv.sample(edge, t) {
+        ReceiverState::Done(neccmd) => {
+
+            let bits = recv.bitbuf;
+            let cmd;
+            let proto;
+
+            if StandardType::verify_command(recv.bitbuf) {
+                cmd = StandardType::decode_command(bits);
+                proto = StandardType::PROTOCOL;
+            }
+            else if Nec16Type::verify_command(recv.bitbuf) {
+                cmd = Nec16Type::decode_command(bits);
+                proto = Nec16Type::PROTOCOL;
+            }
+            else {
+                cmd = StandardType::decode_command(bits);
+                proto = StandardType::PROTOCOL;
+            }
+
+            recv.reset();
+
+            return Some(DecodedButton::new(proto,
+                                           cmd.address(),
+                                           cmd.command()))
         }
         ReceiverState::Error(_err) => {
             recv.reset();
