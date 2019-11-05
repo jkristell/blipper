@@ -15,6 +15,8 @@ mod irsend;
 use libblipperhost::{
     SerialLink,
 };
+use infrared::ProtocolId;
+use crate::blippervcd::{play_rc5, play_rc6, play_nec};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
@@ -33,7 +35,11 @@ enum CliCommand {
     /// Decode in realtime with protocol
     Decode {},
     /// Playback vcd file
-    PlaybackVcd { path: Option<PathBuf> },
+    PlaybackVcd {
+        /// nec nes rc5 rc5 sbp
+        protocol_string: String,
+        path: PathBuf,
+    },
     /// Capture data from device. Optionaly write it to file
     Capture { path: Option<PathBuf> },
     /// Use Device as <protocol> receiver
@@ -45,7 +51,9 @@ enum CliCommand {
 fn main() -> io::Result<()> {
     let opt = Opt::from_args();
 
-    let loglevel = if opt.debug {
+    let debug = opt.debug;
+
+    let loglevel = if debug {
         log::LevelFilter::Debug
     } else {
         log::LevelFilter::Info
@@ -66,9 +74,18 @@ fn main() -> io::Result<()> {
             link.connect(&devpath)?;
             decode::command_decode(&mut link)
         },
-        CliCommand::PlaybackVcd { path } => {
-            let path = path.unwrap_or_else(|| PathBuf::from("philips-bluray.vcd"));
-            blippervcd::play_saved_vcd(&path, opt.debug)
+        CliCommand::PlaybackVcd {
+            protocol_string,
+            path,
+        } => {
+            use ProtocolId::*;
+
+            match protocol_from_str(&protocol_string) {
+                Nec => play_nec(&path, debug),
+                Rc5 => play_rc5(&path, debug),
+                Rc6 => play_rc6(&path, debug),
+                _ => play_rc5(&path, debug),
+            }
         }
         CliCommand::Protocol { .. } => {
             Ok(())
@@ -78,6 +95,16 @@ fn main() -> io::Result<()> {
             link.connect(&devpath)?;
             irsend::transmit(&mut link, protocol, addr, cmd)
         },
+    }
+}
+
+fn protocol_from_str(s: &str) -> ProtocolId {
+
+    match s {
+        "nec" => ProtocolId::Nec,
+        "nes" => ProtocolId::NecSamsung,
+        "rc6" => ProtocolId::Rc6,
+        _ => ProtocolId::Rc5,
     }
 }
 

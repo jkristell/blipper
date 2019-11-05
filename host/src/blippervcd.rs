@@ -1,12 +1,18 @@
 use std::io;
-
 use std::fs::File;
 use std::io::ErrorKind::InvalidInput;
 use std::path::Path;
-use vcd::{self, SimulationCommand, TimescaleUnit, Value};
+use std::fmt::Debug;
 
+use vcd::{self, SimulationCommand, TimescaleUnit, Value};
 use log::info;
-use infrared::nec::Nec16Receiver;
+
+use infrared::{
+    Receiver,
+    nec::*,
+    rc5::*,
+    rc6::*,
+};
 
 pub struct BlipperVcd<'a> {
     wires: Vec<vcd::IdCode>,
@@ -88,6 +94,8 @@ impl<'a> BlipperVcd<'a> {
     }
 }
 
+
+
 pub fn vcdfile_to_vec(path: &Path) -> io::Result<(u32, Vec<(u64, bool)>)> {
     let file = File::open(path)?;
     let mut parser = vcd::Parser::new(&file);
@@ -134,30 +142,43 @@ pub fn vcdfile_to_vec(path: &Path) -> io::Result<(u32, Vec<(u64, bool)>)> {
     Ok((samplerate, res))
 }
 
-pub fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
-    use infrared::{rc5::Rc5Receiver};
+pub fn play_rc5(path: &Path, debug: bool) -> io::Result<()> {
+    let (samplerate, v) = vcdfile_to_vec(path).unwrap();
+    let mut recv = Rc5Receiver::new(samplerate);
+    play_vcd(&v, &mut recv, debug)
+}
 
-    use infrared::s36::S36Receiver;
+pub fn play_rc6(path: &Path, debug: bool) -> io::Result<()> {
+    let (samplerate, v) = vcdfile_to_vec(path).unwrap();
+    let mut recv = Rc6Receiver::new(samplerate);
+    play_vcd(&v, &mut recv, debug)
+}
 
+pub fn play_nec(path: &Path, debug: bool) -> io::Result<()> {
+    let (samplerate, v) = vcdfile_to_vec(path).unwrap();
+    let mut recv = NecReceiver::new(samplerate);
+    play_vcd(&v, &mut recv, debug)
+}
+
+
+
+pub fn play_vcd<RECV, CMD, ERR>(vcdvec: &[(u64, bool)], recv: &mut RECV, _debug: bool) -> io::Result<()>
+where
+    RECV: Receiver<Cmd = CMD, Err = ERR>,
+    CMD: Debug,
+    ERR: Debug,
+{
     use infrared::prelude::*;
     use std::convert::TryFrom;
 
-    let (samplerate, vcdvec) = vcdfile_to_vec(path)?;
-
-    info!("Replay of vcdfile, samplerate = {}", samplerate);
-
     let vcditer = vcdvec
-        .into_iter()
+        .iter()
+        .cloned()
         .map(|(t, v)| (u32::try_from(t).unwrap(), v));
-
-    let mut recv = S36Receiver::new(samplerate);
-
-    println!("{:?}", recv.tolerances);
 
 
     for (t, value) in vcditer {
         let state = recv.sample(value, t);
-        //println!("State: {} {} {} {} {:?}", value, recv.delta, recv.prev_sampletime, t, recv.state);
 
         if let ReceiverState::Done(ref cmd) = state {
             println!("Cmd: {:?} ", cmd);
@@ -165,7 +186,7 @@ pub fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
         }
 
         if let ReceiverState::Error(err) = state {
-            println!("--Error: {:?}", err);
+            println!("Error: {:?}", err);
             recv.reset();
         }
     }
