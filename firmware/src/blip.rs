@@ -32,13 +32,10 @@ impl Txers {
 
     fn new(samplerate: u32) -> Self {
 
-        // Remove in next infrared release
-        let period: u32 = (1 * 1000) / (samplerate / 1000);
-
         Self {
-            nec: NecTransmitter::new(period),
-            nes: NecSamsungTransmitter::new(period),
-            rc5: Rc5Transmitter::new_for_samplerate(samplerate),
+            nec: NecTransmitter::new(samplerate),
+            nes: NecSamsungTransmitter::new(samplerate),
+            rc5: Rc5Transmitter::new(samplerate),
             active: 0,
         }
     }

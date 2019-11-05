@@ -2,6 +2,7 @@ use infrared::ProtocolId;
 use infrared::rc5::Rc5Receiver;
 use infrared::rc6::Rc6Receiver;
 use infrared::nec::*;
+use infrared::sbp::*;
 use infrared::prelude::*;
 
 use infrared::remotes::{
@@ -36,6 +37,7 @@ pub struct Decoder {
     nec: NecReceiver,
     nes: NecSamsungReceiver,
     n16: Nec16Receiver,
+    sbp: SbpReceiver,
 }
 
 impl Decoder {
@@ -48,6 +50,7 @@ impl Decoder {
             nec: NecReceiver::new(samplerate),
             nes: NecSamsungReceiver::new(samplerate),
             n16: Nec16Receiver::new(samplerate),
+            sbp: SbpReceiver::new(samplerate),
         }
     }
 
@@ -72,6 +75,10 @@ impl Decoder {
             }
 
             if let Some(cmd) = sample(&mut self.nes, rising, t) {
+                return Some(cmd);
+            }
+
+            if let Some(cmd) = sample(&mut self.sbp, rising, t) {
                 return Some(cmd);
             }
         }
@@ -108,7 +115,7 @@ where
 fn sample_nec(recv: &mut NecReceiver, edge: bool, t: u32) -> Option<DecodedButton>
 {
     match recv.sample(edge, t) {
-        ReceiverState::Done(neccmd) => {
+        ReceiverState::Done(_neccmd) => {
 
             let bits = recv.bitbuf;
             let cmd;
