@@ -1,5 +1,6 @@
 use common::{Reply, RawData, Protocol};
 use infrared::prelude::*;
+use infrared::prelude::hal::*;
 use infrared::logging::LoggingReceiver;
 use infrared::nec::{NecTransmitter, NecSamsungTransmitter, NecCommand};
 use infrared::rc5::{Rc5Transmitter, Rc5Command};
