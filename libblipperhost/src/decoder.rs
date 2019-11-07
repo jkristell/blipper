@@ -1,9 +1,11 @@
-use infrared::ProtocolId;
-use infrared::rc5::Rc5Receiver;
-use infrared::rc6::Rc6Receiver;
-use infrared::nec::*;
-use infrared::sbp::*;
-use infrared::prelude::*;
+use infrared::{
+    ProtocolId,
+    rc5::Rc5Receiver,
+    rc6::Rc6Receiver,
+    nec::*,
+    sbp::*,
+    prelude::*,
+};
 
 use infrared::remotes::{
         std::RemoteControlData,
@@ -30,13 +32,11 @@ impl DecodedButton {
     }
 }
 
-
 pub struct Decoder {
     rc5: Rc5Receiver,
     rc6: Rc6Receiver,
     nec: NecReceiver,
     nes: NecSamsungReceiver,
-    n16: Nec16Receiver,
     sbp: SbpReceiver,
 }
 
@@ -49,7 +49,6 @@ impl Decoder {
             rc6: Rc6Receiver::new(samplerate),
             nec: NecReceiver::new(samplerate),
             nes: NecSamsungReceiver::new(samplerate),
-            n16: Nec16Receiver::new(samplerate),
             sbp: SbpReceiver::new(samplerate),
         }
     }
@@ -85,8 +84,6 @@ impl Decoder {
         None
     }
 }
-
-
 
 fn sample<RECEIVER, CMD, ERR>(recv: &mut RECEIVER, edge: bool, t: u32) -> Option<DecodedButton>
 where

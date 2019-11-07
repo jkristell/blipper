@@ -23,6 +23,7 @@ pub fn transmit(link: &mut SerialLink,
     link.send_command(Command::RemoteControlSend(rc_cmd))?;
 
     link.reply_ok()?;
+
     info!("Got ok");
 
     Ok(())

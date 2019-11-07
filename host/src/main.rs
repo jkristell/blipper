@@ -6,7 +6,6 @@ use structopt::StructOpt;
 //use log::{error, info};
 
 mod blippervcd;
-//mod link;
 mod capture;
 mod decode;
 mod irsend;
@@ -19,7 +18,7 @@ use infrared::ProtocolId;
 use crate::blippervcd::{play_rc5, play_rc6, play_nec};
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "example", about = "An example of StructOpt usage.")]
+#[structopt(name = "Blipper", about = "Blipper cli tool")]
 struct Opt {
     /// Serial Device. Defaults to /dev/ttyACM0
     #[structopt(long = "device", parse(from_os_str))]
@@ -80,11 +79,17 @@ fn main() -> io::Result<()> {
         } => {
             use ProtocolId::*;
 
-            match protocol_from_str(&protocol_string) {
-                Nec => play_nec(&path, debug),
-                Rc5 => play_rc5(&path, debug),
-                Rc6 => play_rc6(&path, debug),
-                _ => play_rc5(&path, debug),
+            if let Some(proto) = protocol_from_str(&protocol_string) {
+
+                match proto {
+                    Nec => play_nec(&path, debug),
+                    Rc5 => play_rc5(&path, debug),
+                    Rc6 => play_rc6(&path, debug),
+                    _ => play_rc5(&path, debug),
+                }
+            } else {
+                println!("Protocol: {} not found", protocol_string);
+                Ok(())
             }
         }
         CliCommand::Protocol { .. } => {
@@ -98,13 +103,14 @@ fn main() -> io::Result<()> {
     }
 }
 
-fn protocol_from_str(s: &str) -> ProtocolId {
-
+fn protocol_from_str(s: &str) -> Option<ProtocolId> {
     match s {
-        "nec" => ProtocolId::Nec,
-        "nes" => ProtocolId::NecSamsung,
-        "rc6" => ProtocolId::Rc6,
-        _ => ProtocolId::Rc5,
+        "nec" => Some(ProtocolId::Nec),
+        "nes" => Some(ProtocolId::NecSamsung),
+        "n16" => Some(ProtocolId::Nec16),
+        "sbp" => Some(ProtocolId::Sbp),
+        "rc6" => Some(ProtocolId::Rc6),
+        _ => None,
     }
 }
 

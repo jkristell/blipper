@@ -12,11 +12,6 @@ pub fn command_decode(link: &mut SerialLink) -> io::Result<()> {
     let mut decoder = Decoder::new(40_000);
     link.send_command(Command::CaptureRaw)?;
 
-
-
-
-
-
     loop {
 
         if let Ok(Reply::CaptureRawData {rawdata}) = link.read_reply() {
@@ -26,8 +21,7 @@ pub fn command_decode(link: &mut SerialLink) -> io::Result<()> {
             println!("{:?}", decoded);
         }
         else {
-            //eprintln!("Unexpected reply");
+            info!("Unexpected reply");
         }
     }
 }
-
