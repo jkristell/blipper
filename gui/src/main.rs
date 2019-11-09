@@ -17,12 +17,13 @@ use gdk_pixbuf::Pixbuf;
 use infrared::remotes::{StandardButton};
 use infrared::remotes::std::RemoteControlData;
 
-use libblipperhost::{
+use libblipper::{
     link::SerialLink,
-    decoder::Decoder,
+    decoder::{
+        Decoder,
+        DecodedButton,
+    },
 };
-use libblipperhost::decoder::DecodedButton;
-
 
 struct TransmitPanel {
     rcselect: ComboBoxText,

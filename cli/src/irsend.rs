@@ -1,7 +1,7 @@
 use std::io;
 use log::info;
 use common::{Command, RemoteControlCmd};
-use libblipperhost::SerialLink;
+use libblipper::SerialLink;
 
 pub fn transmit(link: &mut SerialLink,
                 protocol: u32,

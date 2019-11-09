@@ -142,19 +142,19 @@ pub fn vcdfile_to_vec(path: &Path) -> io::Result<(u32, Vec<(u64, bool)>)> {
     Ok((samplerate, res))
 }
 
-pub fn play_rc5(path: &Path, debug: bool) -> io::Result<()> {
+pub fn playback_rc5(path: &Path, debug: bool) -> io::Result<()> {
     let (samplerate, v) = vcdfile_to_vec(path).unwrap();
     let mut recv = Rc5Receiver::new(samplerate);
     play_vcd(&v, &mut recv, debug)
 }
 
-pub fn play_rc6(path: &Path, debug: bool) -> io::Result<()> {
+pub fn playback_rc6(path: &Path, debug: bool) -> io::Result<()> {
     let (samplerate, v) = vcdfile_to_vec(path).unwrap();
     let mut recv = Rc6Receiver::new(samplerate);
     play_vcd(&v, &mut recv, debug)
 }
 
-pub fn play_nec(path: &Path, debug: bool) -> io::Result<()> {
+pub fn playback_nes(path: &Path, debug: bool) -> io::Result<()> {
     let (samplerate, v) = vcdfile_to_vec(path).unwrap();
     let mut recv = NecReceiver::new(samplerate);
     play_vcd(&v, &mut recv, debug)

@@ -9,7 +9,7 @@ use common::{
 use crate::blippervcd::BlipperVcd;
 
 use log::{info};
-use libblipperhost::SerialLink;
+use libblipper::SerialLink;
 
 pub fn command_capture_raw(link: &mut SerialLink,
                            path: Option<PathBuf>) -> io::Result<()> {

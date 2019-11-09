@@ -2,7 +2,7 @@ use std::io;
 use log::{info};
 
 use common::{ Command, Reply, };
-use libblipperhost::{Decoder, SerialLink};
+use libblipper::{Decoder, SerialLink};
 
 
 pub fn command_decode(link: &mut SerialLink) -> io::Result<()> {

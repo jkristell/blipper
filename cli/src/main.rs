@@ -11,11 +11,11 @@ mod decode;
 mod irsend;
 
 //use link::SerialLink;
-use libblipperhost::{
+use libblipper::{
     SerialLink,
 };
 use infrared::ProtocolId;
-use crate::blippervcd::{play_rc5, play_rc6, play_nec};
+use crate::blippervcd::{playback_rc5, playback_rc6, playback_nes};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Blipper", about = "Blipper cli tool")]
@@ -60,32 +60,39 @@ fn main() -> io::Result<()> {
 
     femme::start(loglevel).unwrap();
 
-    let devpath = opt.serial.unwrap_or_else(|| PathBuf::from("/dev/ttyACM0"));
+    let path_serialport =
+        if let Some(path) = opt.serial {
+            path
+        } else if let Ok(ports) = serialport::available_ports() {
+            ports
+                .first()
+                .map(|port| PathBuf::from(&port.port_name))
+                .unwrap()
+        } else {
+            PathBuf::from("/dev/ttyACM0")
+        };
 
     match opt.cmd {
         CliCommand::Capture { path } => {
             let mut link = SerialLink::new();
-            link.connect(&devpath)?;
+            link.connect(&path_serialport)?;
             capture::command_capture_raw(&mut link, path)
         },
         CliCommand::Decode {} => {
             let mut link = SerialLink::new();
-            link.connect(&devpath)?;
+            link.connect(&path_serialport)?;
             decode::command_decode(&mut link)
         },
-        CliCommand::PlaybackVcd {
-            protocol_string,
-            path,
-        } => {
-            use ProtocolId::*;
+        CliCommand::PlaybackVcd { protocol_string, path } => {
 
             if let Some(proto) = protocol_from_str(&protocol_string) {
-
+                use ProtocolId::*;
                 match proto {
-                    Nec => play_nec(&path, debug),
-                    Rc5 => play_rc5(&path, debug),
-                    Rc6 => play_rc6(&path, debug),
-                    _ => play_rc5(&path, debug),
+                    Nec | Nec16 => playback_nes(&path, debug),
+                    //NecSamsung => play_
+                    Rc5 => playback_rc5(&path, debug),
+                    Rc6 => playback_rc6(&path, debug),
+                    _ => playback_rc5(&path, debug),
                 }
             } else {
                 println!("Protocol: {} not found", protocol_string);
@@ -97,7 +104,7 @@ fn main() -> io::Result<()> {
         },
         CliCommand::Transmit { protocol, addr, cmd } => {
             let mut link = SerialLink::new();
-            link.connect(&devpath)?;
+            link.connect(&path_serialport)?;
             irsend::transmit(&mut link, protocol, addr, cmd)
         },
     }
@@ -106,9 +113,10 @@ fn main() -> io::Result<()> {
 fn protocol_from_str(s: &str) -> Option<ProtocolId> {
     match s {
         "nec" => Some(ProtocolId::Nec),
-        "nes" => Some(ProtocolId::NecSamsung),
         "n16" => Some(ProtocolId::Nec16),
+        "nes" => Some(ProtocolId::NecSamsung),
         "sbp" => Some(ProtocolId::Sbp),
+        "rc5" => Some(ProtocolId::Rc5),
         "rc6" => Some(ProtocolId::Rc6),
         _ => None,
     }

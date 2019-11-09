@@ -17,6 +17,15 @@ impl SerialLink {
         }
     }
 
+    pub fn list_ports() -> Result<Vec<String>, serialport::Error> {
+        serialport::available_ports()
+            .map(|portvec|
+                portvec.iter()
+                    .map(|port| port.port_name.clone())
+                    .collect()
+            )
+    }
+
     pub fn connect<P: AsRef<Path>>(&mut self, path: P) -> Result<(), serialport::Error> {
 
         let settings = SerialPortSettings {
