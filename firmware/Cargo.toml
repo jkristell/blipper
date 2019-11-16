@@ -16,7 +16,7 @@ panic-semihosting = "0.5.2"
 stm32-usbd = { version = "0.5.0", features = ["ram_access_1x16"] }
 usb-device = "0.2.0"
 usbd-serial = "0.1.0"
-cortex-m-rtfm = "0.4.3"
+cortex-m-rtfm = "0.5"
 cortex-m-semihosting = "0.3.4"
 embedded-hal = { version = "0.2.3" }
 heapless = "0.5.1"
