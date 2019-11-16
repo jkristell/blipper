@@ -10,21 +10,29 @@ categories = ["no-std", "embedded"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-stm32f1xx-hal = { version = "0.3", features = ["rt", "stm32f103"] }
 cortex-m = "0.6"
 cortex-m-rt = { version = "0.6.10", features = ["device"] }
 panic-semihosting = "0.5.2"
-stm32-usbd = { version = "0.3.0", features = ["stm32f103xx"] }
+stm32-usbd = { version = "0.5.0", features = ["ram_access_1x16"] }
 usb-device = "0.2.0"
 usbd-serial = "0.1.0"
 cortex-m-rtfm = "0.4.3"
 cortex-m-semihosting = "0.3.4"
 embedded-hal = { version = "0.2.3" }
-#infrared = "0.4.1"
-infrared = { path = "../../infrared", features = ["embedded-hal"] }
 heapless = "0.5.1"
 postcard = "0.4.1"
 common = { path = "../common" }
+
+
+[dependencies.stm32f1xx-hal]
+git = "https://github.com/stm32-rs/stm32f1xx-hal.git"
+# version = "0.4"
+features = ["rt", "stm32-usbd", "stm32f103"]
+
+
+[dependencies.infrared]
+version ="0.5.0"
+features = ["embedded-hal"]
 
 
 [profile.dev]

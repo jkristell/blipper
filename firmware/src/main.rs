@@ -9,17 +9,22 @@ use rtfm::app;
 
 use stm32f1xx_hal::{
     prelude::*,
+    pac,
     gpio::{gpiob::{PB8, PB9}, Floating, Input},
     gpio::{Alternate, PushPull},
     pwm::{Pins, Pwm, C4},
     stm32::{TIM4},
     device,
-    timer::{self, Timer},
+    timer::{self, Timer, CountDownTimer, Event },
 };
 
+use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
 
+use embedded_hal::digital::v2::{
+    InputPin,
+    OutputPin
+};
 
-use stm32_usbd::{UsbBus, UsbBusType};
 use usb_device::bus;
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
@@ -46,13 +51,13 @@ impl Pins<TIM4> for PwmChannels {
     type Channels = Pwm<TIM4, C4>;
 }
 
-#[app(device = stm32f1xx_hal::stm32)]
+#[app(device = stm32f1xx_hal::pac)]
 const APP: () = {
 
     static mut USB_DEV: UsbDevice<'static, UsbBusType> = ();
     static mut SERIAL: SerialPort<'static, UsbBusType> = ();
 
-    static mut TIMER_MS: Timer<device::TIM2> = ();
+    static mut TIMER_MS: CountDownTimer<device::TIM2> = ();
     static mut IRPIN: PB8<Input<Floating>> = ();
     static mut PWM: Pwm<TIM4, C4> = ();
 
@@ -80,14 +85,20 @@ const APP: () = {
         // BluePill board has a pull-up resistor on the D+ line.
         // Pull the D+ pin down to send a RESET condition to the USB bus.
         let mut usb_dp = gpioa.pa12.into_push_pull_output(&mut gpioa.crh);
-        usb_dp.set_low();
+        let _ = usb_dp.set_low().ok();
         delay(clocks.sysclk().0 / 100);
 
         let usb_dm = gpioa.pa11;
         let usb_dp = usb_dp.into_floating_input(&mut gpioa.crh);
 
-        *USB_BUS = Some(UsbBus::new(device.USB, (usb_dm, usb_dp)));
 
+        let usb = Peripheral {
+            usb: device.USB,
+            pin_dm: usb_dm,
+            pin_dp: usb_dp,
+        };
+
+        *USB_BUS = Some(UsbBus::new(usb));
         let serial = SerialPort::new(USB_BUS.as_ref().unwrap());
 
         let usb_dev =
@@ -99,10 +110,8 @@ const APP: () = {
                 .build();
 
         // Setup the Timer
-        let mut timer_ms = Timer::tim2(device.TIM2,
-                                       SAMPLERATE.hz(),
-                                       clocks,
-                                       &mut rcc.apb1);
+        let mut timer_ms = Timer::tim2(device.TIM2, &clocks, &mut rcc.apb1)
+            .start_count_down(SAMPLERATE.hz());
 
         timer_ms.listen(timer::Event::Update);
 
@@ -114,13 +123,9 @@ const APP: () = {
         let mut afio = device.AFIO.constrain(&mut rcc.apb2);
         let irled = gpiob.pb9.into_alternate_push_pull(&mut gpiob.crh);
 
-        let mut c4: Pwm<TIM4, C4> = device.TIM4.pwm(
-            PwmChannels(irled),
-            &mut afio.mapr,
-            38.khz(),
-            clocks,
-            &mut rcc.apb1,
-        );
+        let mut c4 = Timer::tim4(device.TIM4, &clocks, &mut rcc.apb1)
+            .pwm(PwmChannels(irled), &mut afio.mapr, 38.khz());
+
         // Set the duty cycle of channel 0 to 50%
         c4.set_duty(c4.get_max_duty() / 2);
         c4.disable();
@@ -158,9 +163,11 @@ const APP: () = {
     )]
     fn TIM2() {
         static mut TS: u32 = 0;
-        let edge = resources.IRPIN.is_low();
+        let edge = resources.IRPIN.is_low().unwrap();
         // Ack the timer interrupt
-        resources.TIMER_MS.clear_update_interrupt_flag();
+        let timer = resources.TIMER_MS;
+
+        timer.clear_update_interrupt_flag();
 
         let blip = &mut resources.BLIP;
 
