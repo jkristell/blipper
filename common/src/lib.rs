@@ -31,13 +31,6 @@ pub struct GenericRemote {
     pub addr: u16,
     pub cmd: u16,
 }
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Protocol {
-    Nec = 1,
-    NecSamsung = 2,
-    Rc5 = 3,
-    Rc6 = 4,
-}
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct RemoteControlCmd {

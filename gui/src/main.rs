@@ -132,7 +132,7 @@ impl BlipperGui {
             cmd: cmd,
         };
 
-        info!("Sending command: {:?}", cmd);
+        println!("Sending command: {:?}", cmd);
 
         self.arclink.lock().unwrap().send_command(common::Command::RemoteControlSend(cmd))
     }

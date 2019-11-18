@@ -265,7 +265,6 @@ fn usb_poll<B: bus::UsbBus>(
                 usb_send_reply(serial, &Reply::Ok);
 
                 blip.txers.load(cmd.txid, cmd.addr, cmd.cmd);
-
                 blip.state = blip::State::IrSend;
             }
         }
