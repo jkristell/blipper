@@ -1,20 +1,10 @@
-[package]
-name = "blipper"
-version = "0.1.0"
-authors = ["Johan Kristell <johan@jott.se>"]
-edition = "2018"
-description = "Infrared remote control application"
-repository = "https://github.com/jkristell/blipper"
-readme = "README.md"
-keywords = ["infrared", "remote", "rc5", "rc6", "nec"]
-categories = ["embedded"]
-license = "MIT OR Apache-2.0"
-
-[dependencies]
-
 [workspace]
 members = [
     "common",
-    "host",
-    "firmware",
+    "libblipper",
+    "cli",
+    "gui",
+]
+exclude = [
+    "firmware"
 ]

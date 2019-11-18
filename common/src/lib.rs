@@ -39,9 +39,10 @@ pub struct RemoteControlCmd {
     pub cmd: u8,
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Info {
     pub version: u32,
+    /// Bitfield of transmitters
+    pub transmitters: u32,
 }
 

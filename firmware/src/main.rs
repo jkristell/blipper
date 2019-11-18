@@ -7,32 +7,23 @@ use cortex_m::asm::delay;
 use cortex_m_semihosting::hprintln;
 use rtfm::app;
 
-/*
-use stm32f1xx_hal::{
-    gpio::{gpiob::{PB8, PB9}, Floating, Input},
-    prelude::*,
-    timer::{self, Timer},
-    device,
-    stm32::TIM4,
-};
-
-use stm32f1xx_hal::pwm::{Pwm, C4, Pins};
-use stm32f1xx_hal::gpio::{Alternate, PushPull};
-*/
 use stm32f1xx_hal::{
     prelude::*,
+    pac,
     gpio::{gpiob::{PB8, PB9}, Floating, Input},
     gpio::{Alternate, PushPull},
-    pac,
     pwm::{Pins, Pwm, C4},
-    stm32::{interrupt, TIM4},
-    device,
-    timer::{self, Event, Timer},
+    stm32::{TIM4},
+    timer::{self, Timer, CountDownTimer, },
 };
 
+use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
 
+use embedded_hal::digital::v2::{
+    InputPin,
+    OutputPin
+};
 
-use stm32_usbd::{UsbBus, UsbBusType};
 use usb_device::bus;
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
@@ -59,24 +50,27 @@ impl Pins<TIM4> for PwmChannels {
     type Channels = Pwm<TIM4, C4>;
 }
 
-#[app(device = stm32f1xx_hal::stm32)]
+#[app(device = stm32f1xx_hal::pac, peripherals = true)]
 const APP: () = {
 
-    static mut USB_DEV: UsbDevice<'static, UsbBusType> = ();
-    static mut SERIAL: SerialPort<'static, UsbBusType> = ();
+    struct Resources {
+        USB_DEV: UsbDevice<'static, UsbBusType>,
+        SERIAL: SerialPort<'static, UsbBusType>,
 
-    static mut TIMER_MS: Timer<device::TIM2> = ();
-    static mut IRPIN: PB8<Input<Floating>> = ();
-    static mut PWM: Pwm<TIM4, C4> = ();
+        TIMER_MS: CountDownTimer<pac::TIM2>,
+        IRPIN: PB8<Input<Floating>>,
+        PWM: Pwm<TIM4, C4>,
 
-    static mut SERIAL_RECV_BUF: Vec<u8, U64> = ();
+        SERIAL_RECV_BUF: Vec<u8, U64>,
+        BLIP: blip::Blip,
+    }
 
-    static mut BLIP: blip::Blip = ();
 
     #[init]
-    fn init() -> init::LateResources {
+    fn init(ctx: init::Context) -> init::LateResources {
         static mut USB_BUS: Option<bus::UsbBusAllocator<UsbBusType>> = None;
 
+        let device = ctx.device;
         let mut flash = device.FLASH.constrain();
         let mut rcc = device.RCC.constrain();
 
@@ -93,14 +87,20 @@ const APP: () = {
         // BluePill board has a pull-up resistor on the D+ line.
         // Pull the D+ pin down to send a RESET condition to the USB bus.
         let mut usb_dp = gpioa.pa12.into_push_pull_output(&mut gpioa.crh);
-        usb_dp.set_low();
+        let _ = usb_dp.set_low().ok();
         delay(clocks.sysclk().0 / 100);
 
         let usb_dm = gpioa.pa11;
         let usb_dp = usb_dp.into_floating_input(&mut gpioa.crh);
 
-        *USB_BUS = Some(UsbBus::new(device.USB, (usb_dm, usb_dp)));
 
+        let usb = Peripheral {
+            usb: device.USB,
+            pin_dm: usb_dm,
+            pin_dp: usb_dp,
+        };
+
+        *USB_BUS = Some(UsbBus::new(usb));
         let serial = SerialPort::new(USB_BUS.as_ref().unwrap());
 
         let usb_dev =
@@ -112,10 +112,8 @@ const APP: () = {
                 .build();
 
         // Setup the Timer
-        let mut timer_ms = Timer::tim2(device.TIM2,
-                                       SAMPLERATE.hz(),
-                                       clocks,
-                                       &mut rcc.apb1);
+        let mut timer_ms = Timer::tim2(device.TIM2, &clocks, &mut rcc.apb1)
+            .start_count_down(SAMPLERATE.hz());
 
         timer_ms.listen(timer::Event::Update);
 
@@ -127,13 +125,9 @@ const APP: () = {
         let mut afio = device.AFIO.constrain(&mut rcc.apb2);
         let irled = gpiob.pb9.into_alternate_push_pull(&mut gpiob.crh);
 
-        let mut c4: Pwm<TIM4, C4> = device.TIM4.pwm(
-            PwmChannels(irled),
-            &mut afio.mapr,
-            38.khz(),
-            clocks,
-            &mut rcc.apb1,
-        );
+        let mut c4 = Timer::tim4(device.TIM4, &clocks, &mut rcc.apb1)
+            .pwm(PwmChannels(irled), &mut afio.mapr, 38.khz());
+
         // Set the duty cycle of channel 0 to 50%
         c4.set_duty(c4.get_max_duty() / 2);
         c4.disable();
@@ -150,39 +144,42 @@ const APP: () = {
     }
 
     #[idle]
-    fn idle() -> ! {
-        hprintln!("Ready!").unwrap();
+    fn idle(_ctx: idle::Context) -> ! {
+        let _ = hprintln!("Ready!");
         loop {
             continue;
         }
     }
 
     #[task(resources = [USB_DEV, SERIAL])]
-    fn send_reply(reply: Reply) {
-        let mut serial = &mut resources.SERIAL;
+    fn send_reply(ctx: send_reply::Context, reply: Reply) {
+        let mut serial = ctx.resources.SERIAL;
 
         let reply_vec: heapless::Vec<u8, U512> = to_vec(&reply).unwrap();
         usb_write(&mut serial, &reply_vec);
     }
 
-    #[interrupt(
+    #[task(
+        binds = TIM2,
         spawn = [send_reply],
         resources = [TIMER_MS, IRPIN, BLIP, PWM],
     )]
-    fn TIM2() {
+    fn timer2_interrupt(ctx: timer2_interrupt::Context) {
         static mut TS: u32 = 0;
-        let edge = resources.IRPIN.is_low();
+        let edge = ctx.resources.IRPIN.is_low().unwrap();
         // Ack the timer interrupt
-        resources.TIMER_MS.clear_update_interrupt_flag();
+        let timer = ctx.resources.TIMER_MS;
 
-        let blip = &mut resources.BLIP;
+        timer.clear_update_interrupt_flag();
+
+        let blip = ctx.resources.BLIP;
 
         match blip.state {
             blip::State::Idle => {}
             blip::State::CaptureRaw => {
 
                 if let Some(reply) = blip.sample(edge, *TS) {
-                    if spawn.send_reply(reply).is_err() {
+                    if ctx.spawn.send_reply(reply).is_err() {
                         hprintln!("Error sending").unwrap();
                     }
 
@@ -190,7 +187,7 @@ const APP: () = {
                 }
             }
             blip::State::IrSend => {
-                blip.irsend(*TS, resources.PWM);
+                blip.irsend(*TS, ctx.resources.PWM);
             }
         }
 
@@ -198,18 +195,22 @@ const APP: () = {
         *TS = TS.wrapping_add(1);
     }
 
-    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIP])]
-    fn USB_HP_CAN_TX() {
-        let mut buf = resources.SERIAL_RECV_BUF;
-        let mut blipper_blip = &mut resources.BLIP;
-        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf, &mut blipper_blip);
+    #[task(
+        binds = USB_HP_CAN_TX,
+        resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIP])]
+    fn usb_tx(ctx: usb_tx::Context) {
+        let mut buf = ctx.resources.SERIAL_RECV_BUF;
+        let blipper_blip = ctx.resources.BLIP;
+        usb_poll(ctx.resources.USB_DEV, ctx.resources.SERIAL, &mut buf, blipper_blip);
     }
 
-    #[interrupt(resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIP])]
-    fn USB_LP_CAN_RX0() {
-        let mut buf = resources.SERIAL_RECV_BUF;
-        let mut blipper_blip = &mut resources.BLIP;
-        usb_poll(&mut resources.USB_DEV, &mut resources.SERIAL, &mut buf, &mut blipper_blip);
+    #[task(
+        binds = USB_LP_CAN_RX0,
+        resources = [USB_DEV, SERIAL, SERIAL_RECV_BUF, BLIP])]
+    fn usb_rx(ctx: usb_rx::Context) {
+        let mut buf = ctx.resources.SERIAL_RECV_BUF;
+        let blipper_blip = ctx.resources.BLIP;
+        usb_poll(ctx.resources.USB_DEV, ctx.resources.SERIAL, &mut buf, blipper_blip);
     }
 
     // Interrupt used by the tasks
@@ -223,20 +224,16 @@ fn usb_poll<B: bus::UsbBus>(
     serial: &mut SerialPort<'static, B>,
     buf: &mut Vec<u8, U64>,
     blip: &mut blip::Blip
-    //state: &mut BlipperState,
-    //samplerate: &mut u32,
 ) {
     if !usb_dev.poll(&mut [serial]) {
         return;
     }
 
-    let mut localbuf = [0u8; 32];
+    let mut tmpbuf = [0u8; 32];
 
-    match serial.read(&mut localbuf) {
+    match serial.read(&mut tmpbuf) {
         Ok(count) if count > 0 => {
-            for c in &localbuf {
-                buf.push(*c).unwrap();
-            }
+            let _ = buf.extend_from_slice(&tmpbuf);
         }
         _ => {}
     }
@@ -244,29 +241,30 @@ fn usb_poll<B: bus::UsbBus>(
     match from_bytes::<Command>(&buf) {
         Ok(cmd) => match cmd {
             Command::Idle => {
-                hprintln!("cmd idle").unwrap();
+                let _ = hprintln!("cmd idle");
                 blip.state = blip::State::Idle;
                 usb_send_reply(serial, &Reply::Ok);
             }
             Command::Info => {
                 let info: Info = Info {
                     version: VERSION,
+                    transmitters: blip::ENABLED_TRANSMITTERS,
                 };
+                let _ = hprintln!("info");
                 usb_send_reply(serial, &Reply::Info {info});
             }
             Command::CaptureRaw => {
-                hprintln!("cap raw").unwrap();
+                let _ = hprintln!("State: capture");
                 blip.state = blip::State::CaptureRaw;
             }
             Command::CaptureProtocol(id) => {
-                hprintln!("Not implemented: {}", id).unwrap();
+                let _ = hprintln!("Not implemented: {}", id);
             }
             Command::RemoteControlSend(cmd) => {
-                hprintln!("irsend").unwrap();
+                let _ = hprintln!("sending");
                 usb_send_reply(serial, &Reply::Ok);
 
                 blip.txers.load(cmd.txid, cmd.addr, cmd.cmd);
-
                 blip.state = blip::State::IrSend;
             }
         }
@@ -275,6 +273,7 @@ fn usb_poll<B: bus::UsbBus>(
 
     buf.clear();
 }
+
 
 
 fn usb_write<B: bus::UsbBus>(
