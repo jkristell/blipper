@@ -31,7 +31,8 @@ features = ["rt", "stm32-usbd", "stm32f103"]
 
 
 [dependencies.infrared]
-version ="0.5.0"
+#version ="0.5.0"
+path = "../../infrared"
 features = ["embedded-hal"]
 
 

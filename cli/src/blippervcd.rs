@@ -7,12 +7,8 @@ use std::fmt::Debug;
 use vcd::{self, SimulationCommand, TimescaleUnit, Value};
 use log::info;
 
-use infrared::{
-    Receiver,
-    nec::*,
-    rc5::*,
-    rc6::*,
-};
+use infrared::{nec::*, rc5::*, rc6::*, Command};
+use infrared::receiver::ReceiverStateMachine;
 
 pub struct BlipperVcd<'a> {
     wires: Vec<vcd::IdCode>,
@@ -144,29 +140,28 @@ pub fn vcdfile_to_vec(path: &Path) -> io::Result<(u32, Vec<(u64, bool)>)> {
 
 pub fn playback_rc5(path: &Path, debug: bool) -> io::Result<()> {
     let (samplerate, v) = vcdfile_to_vec(path).unwrap();
-    let mut recv = Rc5Receiver::new(samplerate);
+    let mut recv = Rc5::new(samplerate);
     play_vcd(&v, &mut recv, debug)
 }
 
 pub fn playback_rc6(path: &Path, debug: bool) -> io::Result<()> {
     let (samplerate, v) = vcdfile_to_vec(path).unwrap();
-    let mut recv = Rc6Receiver::new(samplerate);
+    let mut recv = Rc6::new(samplerate);
     play_vcd(&v, &mut recv, debug)
 }
 
 pub fn playback_nes(path: &Path, debug: bool) -> io::Result<()> {
     let (samplerate, v) = vcdfile_to_vec(path).unwrap();
-    let mut recv = NecReceiver::new(samplerate);
+    let mut recv = Nec::new(samplerate);
     play_vcd(&v, &mut recv, debug)
 }
 
 
 
-pub fn play_vcd<RECV, CMD, ERR>(vcdvec: &[(u64, bool)], recv: &mut RECV, _debug: bool) -> io::Result<()>
+pub fn play_vcd<RECV, CMD>(vcdvec: &[(u64, bool)], recv: &mut RECV, _debug: bool) -> io::Result<()>
 where
-    RECV: Receiver<Cmd = CMD, Err = ERR>,
-    CMD: Debug,
-    ERR: Debug,
+    RECV: ReceiverStateMachine<Cmd = CMD>,
+    CMD: Debug + Command,
 {
     use infrared::prelude::*;
     use std::convert::TryFrom;
@@ -178,7 +173,7 @@ where
 
 
     for (t, value) in vcditer {
-        let state = recv.sample(value, t);
+        let state = recv.event(value, t);
 
         if let ReceiverState::Done(ref cmd) = state {
             println!("Cmd: {:?} ", cmd);

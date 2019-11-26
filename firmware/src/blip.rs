@@ -81,7 +81,7 @@ impl Blip {
     }
 
     pub fn sample(&mut self, edge: bool, ts: u32) -> Option<Reply> {
-        if let ReceiverState::Done(()) = self.tracer.sample(edge, ts) {
+        if let ReceiverState::Done(_) = self.tracer.event(edge, ts) {
             return Some(traceresult_to_reply(self.samplerate, self.tracer.data()));
         }
         None

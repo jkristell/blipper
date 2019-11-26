@@ -1,15 +1,14 @@
 use infrared::{
     ProtocolId,
-    rc5::Rc5Receiver,
-    rc6::Rc6Receiver,
+    rc5::Rc5,
+    rc6::Rc6,
     nec::*,
     sbp::*,
     prelude::*,
 };
 
 use infrared::remotes::{
-        std::RemoteControlData,
-        RemoteControlCommand,
+    std::RemoteControlData,
 };
 
 
@@ -33,11 +32,11 @@ impl DecodedButton {
 }
 
 pub struct Decoder {
-    rc5: Rc5Receiver,
-    rc6: Rc6Receiver,
-    nec: NecReceiver,
-    nes: NecSamsungReceiver,
-    sbp: SbpReceiver,
+    rc5: Rc5,
+    rc6: Rc6,
+    nec: Nec,
+    nes: NecSamsung,
+    sbp: Sbp,
 }
 
 impl Decoder {
@@ -45,11 +44,11 @@ impl Decoder {
     pub fn new(samplerate: u32) -> Self {
 
         Self {
-            rc5: Rc5Receiver::new(samplerate),
-            rc6: Rc6Receiver::new(samplerate),
-            nec: NecReceiver::new(samplerate),
-            nes: NecSamsungReceiver::new(samplerate),
-            sbp: SbpReceiver::new(samplerate),
+            rc5: Rc5::new(samplerate),
+            rc6: Rc6::new(samplerate),
+            nec: Nec::new(samplerate),
+            nes: NecSamsung::new(samplerate),
+            sbp: Sbp::new(samplerate),
         }
     }
 
@@ -85,17 +84,17 @@ impl Decoder {
     }
 }
 
-fn sample<RECEIVER, CMD, ERR>(recv: &mut RECEIVER, edge: bool, t: u32) -> Option<DecodedButton>
+fn sample<RECEIVER, CMD>(recv: &mut RECEIVER, edge: bool, t: u32) -> Option<DecodedButton>
 where
-    CMD: RemoteControlCommand,
-    RECEIVER: infrared::Receiver<Cmd=CMD, Err=ERR>,
+    CMD: Command,
+    RECEIVER: ReceiverStateMachine<Cmd=CMD>,
 {
-    match recv.sample(edge, t) {
+    match recv.event(edge, t) {
         ReceiverState::Done(cmd) => {
 
             recv.reset();
 
-            return Some(DecodedButton::new(RECEIVER::PROTOCOL_ID,
+            return Some(DecodedButton::new(RECEIVER::ID,
                                            cmd.address(),
                                            cmd.command()))
         }
@@ -109,26 +108,26 @@ where
 }
 
 // Specialization for NEC
-fn sample_nec(recv: &mut NecReceiver, edge: bool, t: u32) -> Option<DecodedButton>
+fn sample_nec(recv: &mut Nec, edge: bool, t: u32) -> Option<DecodedButton>
 {
-    match recv.sample(edge, t) {
+    match recv.event(edge, t) {
         ReceiverState::Done(_neccmd) => {
 
             let bits = recv.bitbuf;
             let cmd;
             let proto;
 
-            if StandardType::verify_command(recv.bitbuf) {
-                cmd = StandardType::decode_command(bits);
-                proto = StandardType::PROTOCOL;
+            if NecStandard::verify_command(recv.bitbuf) {
+                cmd = NecStandard::decode_command(bits);
+                proto = NecStandard::PROTOCOL;
             }
-            else if Nec16Type::verify_command(recv.bitbuf) {
-                cmd = Nec16Type::decode_command(bits);
-                proto = Nec16Type::PROTOCOL;
+            else if Nec16Variant::verify_command(recv.bitbuf) {
+                cmd = Nec16Variant::decode_command(bits);
+                proto = Nec16Variant::PROTOCOL;
             }
             else {
-                cmd = StandardType::decode_command(bits);
-                proto = StandardType::PROTOCOL;
+                cmd = NecStandard::decode_command(bits);
+                proto = NecStandard::PROTOCOL;
             }
 
             recv.reset();
