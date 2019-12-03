@@ -1,14 +1,10 @@
 use infrared::{
-    ProtocolId,
+    ProtocolId, Command, ReceiverStateMachine, ReceiverState,
     rc5::Rc5,
     rc6::Rc6,
     nec::*,
     sbp::*,
-    prelude::*,
-};
-
-use infrared::remotes::{
-    std::RemoteControlData,
+    remotes::std::RemoteControlData,
 };
 
 

@@ -7,8 +7,13 @@ use std::fmt::Debug;
 use vcd::{self, SimulationCommand, TimescaleUnit, Value};
 use log::info;
 
-use infrared::{nec::*, rc5::*, rc6::*, Command};
-use infrared::receiver::ReceiverStateMachine;
+use infrared::{
+    nec::*,
+    rc5::*,
+    rc6::*,
+    ReceiverStateMachine, ReceiverState,
+    Command,
+};
 
 pub struct BlipperVcd<'a> {
     wires: Vec<vcd::IdCode>,
@@ -91,7 +96,6 @@ impl<'a> BlipperVcd<'a> {
 }
 
 
-
 pub fn vcdfile_to_vec(path: &Path) -> io::Result<(u32, Vec<(u64, bool)>)> {
     let file = File::open(path)?;
     let mut parser = vcd::Parser::new(&file);
@@ -163,7 +167,6 @@ where
     RECV: ReceiverStateMachine<Cmd = CMD>,
     CMD: Debug + Command,
 {
-    use infrared::prelude::*;
     use std::convert::TryFrom;
 
     let vcditer = vcdvec
