@@ -1,10 +1,10 @@
 use common::{Reply, RawData};
-use infrared::ProtocolId;
-use infrared::prelude::*;
-use infrared::prelude::hal::*;
-use infrared::logging::LoggingReceiver;
+use infrared::{ProtocolId, ReceiverStateMachine, ReceiverState, Transmitter, TransmitterState, PwmTransmitter};
 use infrared::nec::{NecTransmitter, NecSamsungTransmitter, NecCommand};
 use infrared::rc5::{Rc5Transmitter, Rc5Command};
+use infrared::capture::Capture;
+
+
 use embedded_hal::PwmPin;
 
 const NEC_ID: u8 = ProtocolId::Nec as u8;
@@ -22,14 +22,76 @@ pub enum State {
     IrSend,
 }
 
-pub struct Txers {
+pub struct BlipCapturer {
+    pub sm: Capture,
+    pub pinval: bool,
+    pub last_event_time: u32,
+    pub timeout: u32,
+    pub samplerate: u32,
+}
+
+
+impl BlipCapturer {
+
+    pub fn new(samplerate: u32) -> Self {
+        Self {
+            sm: Capture::new(samplerate),
+            pinval: false,
+            last_event_time: 0,
+            timeout: samplerate / 10,
+            samplerate
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.pinval = false;
+        self.last_event_time = 0;
+        self.sm.reset();
+    }
+
+    pub fn sample(&mut self, edge: bool, ts: u32) -> Option<Reply> {
+
+        let mut res = None;
+
+
+        if self.pinval != edge {
+            if let ReceiverState::Done(_) = self.sm.event(edge, ts) {
+                res = Some(traceresult_to_reply(self.samplerate, self.sm.edges()));
+                // Reset the state machine
+                self.sm.reset();
+            }
+
+            self.last_event_time = ts;
+            self.pinval = edge;
+        } else {
+            if self.last_event_time != 0 && ts.wrapping_sub(self.last_event_time) > self.timeout
+                && self.sm.n_edges > 0
+            {
+                // Timeout
+                res = Some(traceresult_to_reply(self.samplerate, self.sm.edges()));
+                // Reset the state machine
+                self.sm.reset();
+            }
+        }
+
+        self.pinval = edge;
+        res
+    }
+}
+
+
+
+
+
+pub struct Transmitters {
     nec: NecTransmitter,
     nes: NecSamsungTransmitter,
     rc5: Rc5Transmitter,
     active: u8,
 }
 
-impl Txers {
+
+impl Transmitters {
 
     fn new(samplerate: u32) -> Self {
 
@@ -65,8 +127,10 @@ impl Txers {
 
 pub struct Blip {
     pub state: State,
-    pub tracer: LoggingReceiver,
-    pub txers: Txers,
+
+    pub capturer: BlipCapturer,
+
+    pub txers: Transmitters,
     pub samplerate: u32,
 }
 
@@ -74,22 +138,12 @@ impl Blip {
     pub fn new(samplerate: u32) -> Self {
         Blip {
             state: State::Idle,
-            tracer: LoggingReceiver::new(samplerate, 1000),
-            txers: Txers::new(samplerate),
+            capturer: BlipCapturer::new(samplerate),
+            txers: Transmitters::new(samplerate),
             samplerate,
         }
     }
 
-    pub fn sample(&mut self, edge: bool, ts: u32) -> Option<Reply> {
-        if let ReceiverState::Done(_) = self.tracer.event(edge, ts) {
-            return Some(traceresult_to_reply(self.samplerate, self.tracer.data()));
-        }
-        None
-    }
-
-    pub fn reset(&mut self) {
-        self.tracer.reset();
-    }
 
     pub fn irsend<D, PWM: PwmPin<Duty=D>>(&mut self, samplenum: u32, pwm: &mut PWM) -> bool {
 
@@ -97,7 +151,7 @@ impl Blip {
         match state {
             TransmitterState::Idle => false,
             TransmitterState::Transmit(send) => send,
-            TransmitterState::Err => false,
+            TransmitterState::Error => false,
         }
     }
 }

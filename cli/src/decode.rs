@@ -14,14 +14,17 @@ pub fn command_decode(link: &mut SerialLink) -> io::Result<()> {
 
     loop {
 
-        if let Ok(Reply::CaptureRawData {rawdata}) = link.read_reply() {
+        let reply = link.read_reply();
+
+        if let Ok(Reply::CaptureRawData {rawdata}) = reply {
             let v = &rawdata.data.concat()[..rawdata.len as usize];
             let decoded = decoder.decode_data(v);
 
             println!("{:?}", decoded);
         }
         else {
-            info!("Unexpected reply");
+            info!("Unexpected reply: {:?}", reply);
+            return Ok(());
         }
     }
 }

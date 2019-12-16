@@ -5,6 +5,8 @@ use std::io;
 use std::path::{Path};
 use heapless::consts::U64;
 
+use log::info;
+
 pub struct SerialLink {
     port: Option<Box<dyn SerialPort>>,
 }
@@ -51,15 +53,18 @@ impl SerialLink {
         let mut offset = 0;
 
         let port = self.port.as_mut().ok_or(io::ErrorKind::NotConnected)?;
+        println!("port: {:?}", port.name());
 
         loop {
             match port.read(&mut recvbuf[offset..]) {
                 Ok(readlen) => { offset += readlen; }
-                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => break,
+                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => continue,
                 Err(e) => { eprintln!("{:?}", e); break; },
             }
 
+
             let reply = from_bytes::<Reply>(&recvbuf);
+            info!("reply: {:?}", reply);
 
             if let Ok(reply) = reply {
                 match reply {

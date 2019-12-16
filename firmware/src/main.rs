@@ -166,7 +166,7 @@ const APP: () = {
     )]
     fn timer2_interrupt(ctx: timer2_interrupt::Context) {
         static mut TS: u32 = 0;
-        let edge = ctx.resources.IRPIN.is_low().unwrap();
+        let level = ctx.resources.IRPIN.is_low().unwrap();
         // Ack the timer interrupt
         let timer = ctx.resources.TIMER_MS;
 
@@ -178,12 +178,12 @@ const APP: () = {
             blip::State::Idle => {}
             blip::State::CaptureRaw => {
 
-                if let Some(reply) = blip.sample(edge, *TS) {
+                if let Some(reply) = blip.capturer.sample(level, *TS) {
                     if ctx.spawn.send_reply(reply).is_err() {
-                        hprintln!("Error sending").unwrap();
+                        hprintln!("Error sending reply").unwrap();
                     }
 
-                    blip.reset();
+                    //blip.capturer.reset();
                 }
             }
             blip::State::IrSend => {
@@ -255,6 +255,9 @@ fn usb_poll<B: bus::UsbBus>(
             }
             Command::CaptureRaw => {
                 let _ = hprintln!("State: capture");
+
+                blip.capturer.reset();
+
                 blip.state = blip::State::CaptureRaw;
             }
             Command::CaptureProtocol(id) => {

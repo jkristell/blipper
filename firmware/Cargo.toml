@@ -26,8 +26,8 @@ common = { path = "../common" }
 
 [dependencies.stm32f1xx-hal]
 git = "https://github.com/stm32-rs/stm32f1xx-hal.git"
-# version = "0.4"
-features = ["rt", "stm32-usbd", "stm32f103"]
+#version = "0.4"
+features = ["rt", "stm32-usbd", "stm32f103", "medium"]
 
 
 [dependencies.infrared]

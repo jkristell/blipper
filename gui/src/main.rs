@@ -7,15 +7,17 @@ use std::{thread, time, io};
 
 use log::info;
 
-use glib;
+use glib::{self, clone};
 use gio::prelude::*;
 use gtk::prelude::*;
 use gtk::{ApplicationWindow, Builder, Button, ListStore, Grid, ComboBoxText, Label, Image};
 use gtk::GridExt;
 use gdk_pixbuf::Pixbuf;
 
-use infrared::remotes::{StandardButton};
-use infrared::remotes::std::RemoteControlData;
+use infrared::remotes::{
+    StandardButton,
+    std::RemoteControlData,
+};
 
 use libblipper::{
     link::SerialLink,
@@ -73,7 +75,7 @@ impl BlipperGui {
             decoder_panel,
         };
 
-        let model = ListStore::new(&[String::static_type(), gtk::Type::U32,]);
+        let model = ListStore::new(&[String::static_type(), glib::Type::U32,]);
         for (idx, remote) in blippergui.remotes.iter().enumerate() {
             let text = format!("{} ({:?})", remote.model, remote.protocol);
             model.set(&model.append(), &[0, 1], &[&text, &(idx as u32)]);
@@ -107,7 +109,7 @@ impl BlipperGui {
             let refcelled_clone = refcelled.clone();
             combo.connect_changed(move |combo| {
                 let active_id = combo.get_active_iter().unwrap();
-                let value: u32 = model.get_value(&active_id, 1).get().unwrap();
+                let value: u32 = model.get_value(&active_id, 1).get().unwrap().unwrap();
 
                 // Update the selected remote and update view
                 {
@@ -233,10 +235,10 @@ fn build_ui(application: &gtk::Application) {
 
     let link_clone = blippergui.borrow().arclink.clone();
 
-    let blippergui_clone = blippergui.clone();
-    connect_button.connect_clicked(move |_button| {
-        BlipperGui::connect(blippergui_clone.clone());
-    });
+
+    connect_button.connect_clicked(clone!(@weak blippergui => move |_button| {
+        BlipperGui::connect(blippergui);
+    }));
 
     // Create a new sender/receiver pair with default priority
     let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);

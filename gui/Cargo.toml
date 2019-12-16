@@ -5,11 +5,11 @@ authors = ["Johan Kristell <johan@jott.se>"]
 edition = "2018"
 
 [dependencies]
-log = "0.4.8"
-gio = "0.7.0"
-gtk = { version = "0.7.0", features = ["v3_22"] }
-gdk-pixbuf = "0.7.0"
-glib = "0.8.2"
+log = "0.4"
+gio = "0.8"
+gtk = { version = "0.8.0", features = ["v3_22"] }
+gdk-pixbuf = "0.8.0"
+glib = "0.9"
 #infrared = { version = "0.5", features = ["remotes", "std"]}
 infrared = { path = "../../infrared", features = ["remotes", "std"]}
 libblipper = { path = "../libblipper" }
