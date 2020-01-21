@@ -10,9 +10,8 @@ use rtfm::app;
 use stm32f1xx_hal::{
     prelude::*,
     pac,
-    gpio::{gpiob::{PB8, PB9}, Floating, Input},
-    gpio::{Alternate, PushPull},
-    pwm::{Pins, Pwm, C4},
+    gpio::{gpiob::{PB8}, Floating, Input},
+    pwm::{Pwm, C4},
     stm32::{TIM4},
     timer::{self, Timer, CountDownTimer, },
 };
@@ -39,16 +38,6 @@ mod blip;
 
 const VERSION: u32 = 1;
 const SAMPLERATE: u32 = 40_000;
-
-struct PwmChannels(PB9<Alternate<PushPull>>);
-impl Pins<TIM4> for PwmChannels {
-    const REMAP: u8 = 0b00;
-    const C1: bool = false;
-    const C2: bool = false;
-    const C3: bool = false;
-    const C4: bool = true; // PB9
-    type Channels = Pwm<TIM4, C4>;
-}
 
 #[app(device = stm32f1xx_hal::pac, peripherals = true)]
 const APP: () = {
@@ -93,7 +82,6 @@ const APP: () = {
         let usb_dm = gpioa.pa11;
         let usb_dp = usb_dp.into_floating_input(&mut gpioa.crh);
 
-
         let usb = Peripheral {
             usb: device.USB,
             pin_dm: usb_dm,
@@ -126,7 +114,8 @@ const APP: () = {
         let irled = gpiob.pb9.into_alternate_push_pull(&mut gpiob.crh);
 
         let mut c4 = Timer::tim4(device.TIM4, &clocks, &mut rcc.apb1)
-            .pwm(PwmChannels(irled), &mut afio.mapr, 38.khz());
+            .pwm(irled, &mut afio.mapr, 38.khz());
+
 
         // Set the duty cycle of channel 0 to 50%
         c4.set_duty(c4.get_max_duty() / 2);
@@ -254,7 +243,7 @@ fn usb_poll<B: bus::UsbBus>(
                 usb_send_reply(serial, &Reply::Info {info});
             }
             Command::CaptureRaw => {
-                let _ = hprintln!("State: capture");
+                let _ = hprintln!("State: capture").ok();
 
                 blip.capturer.reset();
 

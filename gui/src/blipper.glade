@@ -17,12 +17,13 @@
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
+            <property name="tooltip_text" translatable="yes">Connect to blipper device</property>
             <property name="always_show_image">True</property>
             <child>
               <object class="GtkImage">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
-                <property name="stock">gtk-cdrom</property>
+                <property name="stock">gtk-connect</property>
                 <property name="icon_size">3</property>
               </object>
             </child>
@@ -135,7 +136,7 @@
                     <property name="spacing">6</property>
                     <child>
                       <object class="GtkButton" id="start_receiver_button">
-                        <property name="label" translatable="yes">Start receive</property>
+                        <property name="label" translatable="yes">Start receiver</property>
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="receives_default">True</property>
@@ -150,7 +151,6 @@
                       <object class="GtkLabel" id="remote_protocol">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="label" translatable="yes">label</property>
                         <property name="xalign">0</property>
                       </object>
                       <packing>
@@ -163,7 +163,6 @@
                       <object class="GtkLabel" id="remote_address">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="label" translatable="yes">label</property>
                         <property name="xalign">0</property>
                       </object>
                       <packing>
@@ -176,7 +175,6 @@
                       <object class="GtkLabel" id="remote_command">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="label" translatable="yes">label</property>
                         <property name="xalign">0</property>
                       </object>
                       <packing>
@@ -220,7 +218,6 @@
                       <object class="GtkLabel" id="info_version">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="label" translatable="yes">label</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
@@ -231,7 +228,6 @@
                       <object class="GtkLabel" id="info_protocols">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="label" translatable="yes">label</property>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>

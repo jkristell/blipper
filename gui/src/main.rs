@@ -173,7 +173,7 @@ impl BlipperGui {
         let gui = self_rc.borrow_mut();
         let mut link = gui.arclink.lock().unwrap();
 
-        link.send_command(common::Command::CaptureRaw)
+        link.send_command(common::Command::Capture)
             .map_err(|_err| gui.statusbar_label.set_markup("Error Sending")).ok();
     }
 
@@ -267,7 +267,7 @@ fn build_ui(application: &gtk::Application) {
         let mut decoder = Decoder::new(samplerate);
 
         match reply {
-            common::Reply::CaptureRawData {rawdata} => {
+            common::Reply::CaptureReply {rawdata} => {
 
                 let panel = &blippergui.borrow().decoder_panel;
 
@@ -302,6 +302,9 @@ fn build_ui(application: &gtk::Application) {
 }
 
 fn main() {
+
+    env_logger::init();
+
     let application = gtk::Application::new(
         Some("com.github.jkristell.blipper.gui"),
         Default::default(),

@@ -1,21 +1,18 @@
+use std::fs::File;
 use std::io;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use structopt;
 use structopt::StructOpt;
 
-//use log::{error, info};
+use log::info;
 
-mod blippervcd;
 mod capture;
-mod decode;
 mod irsend;
+mod playback;
+mod vcdutils;
 
-//use link::SerialLink;
-use libblipper::{
-    SerialLink,
-};
-use infrared::ProtocolId;
-use crate::blippervcd::{playback_rc5, playback_rc6, playback_nes};
+use crate::playback::command_playback;
+use libblipper::SerialLink;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Blipper", about = "Blipper cli tool")]
@@ -31,16 +28,18 @@ struct Opt {
 
 #[derive(StructOpt, Debug)]
 enum CliCommand {
-    /// Decode in realtime with protocol
-    Decode {},
     /// Playback vcd file
     PlaybackVcd {
         /// nec nes rc5 rc5 sbp
         protocol_string: String,
         path: PathBuf,
     },
-    /// Capture data from device. Optionaly write it to file
-    Capture { path: Option<PathBuf> },
+    /// Capture / Decode data from device. Optionaly write it to file
+    Capture {
+        path: Option<PathBuf>,
+        #[structopt(short, long)]
+        decode: bool,
+    },
     /// Use Device as <protocol> receiver
     Protocol { id: u32 },
     /// Transmit
@@ -50,75 +49,48 @@ enum CliCommand {
 fn main() -> io::Result<()> {
     let opt = Opt::from_args();
 
-    let debug = opt.debug;
+    env_logger::init();
 
-    let loglevel = if debug {
-        log::LevelFilter::Debug
-    } else {
-        log::LevelFilter::Info
-    };
-
-    femme::start(loglevel).unwrap();
-
-    let path_serialport =
-        if let Some(path) = opt.serial {
-            path
-        } else if let Ok(ports) = serialport::available_ports() {
-            ports
-                .first()
-                .map(|port| PathBuf::from(&port.port_name))
-                .unwrap()
-        } else {
-            PathBuf::from("/dev/ttyACM0")
-        };
+    let path_serialport = select_serialport(opt.serial, "/dev/ttyACM0");
 
     match opt.cmd {
-        CliCommand::Capture { path } => {
+        CliCommand::Capture { path, decode } => {
             let mut link = SerialLink::new();
             link.connect(&path_serialport)?;
-            capture::command_capture_raw(&mut link, path)
-        },
-        CliCommand::Decode {} => {
-            let mut link = SerialLink::new();
-            link.connect(&path_serialport)?;
-            decode::command_decode(&mut link)
-        },
-        CliCommand::PlaybackVcd { protocol_string, path } => {
 
-            if let Some(proto) = protocol_from_str(&protocol_string) {
-                use ProtocolId::*;
-                match proto {
-                    Nec | Nec16 => playback_nes(&path, debug),
-                    //NecSamsung => play_
-                    Rc5 => playback_rc5(&path, debug),
-                    Rc6 => playback_rc6(&path, debug),
-                    _ => playback_rc5(&path, debug),
-                }
-            } else {
-                println!("Protocol: {} not found", protocol_string);
-                Ok(())
-            }
+            let vcdout = path.and_then(|path| {
+                info!("Writing to path: {:?}", path);
+                File::create(&path).ok()
+            });
+
+            capture::command_capture(&mut link, decode, vcdout)
         }
-        CliCommand::Protocol { .. } => {
-            Ok(())
-        },
-        CliCommand::Transmit { protocol, addr, cmd } => {
+        CliCommand::PlaybackVcd {
+            protocol_string,
+            path,
+        } => command_playback(&protocol_string, &path),
+        CliCommand::Protocol { .. } => Ok(()),
+        CliCommand::Transmit {
+            protocol,
+            addr,
+            cmd,
+        } => {
             let mut link = SerialLink::new();
             link.connect(&path_serialport)?;
             irsend::transmit(&mut link, protocol, addr, cmd)
-        },
+        }
     }
 }
 
-fn protocol_from_str(s: &str) -> Option<ProtocolId> {
-    match s {
-        "nec" => Some(ProtocolId::Nec),
-        "n16" => Some(ProtocolId::Nec16),
-        "nes" => Some(ProtocolId::NecSamsung),
-        "sbp" => Some(ProtocolId::Sbp),
-        "rc5" => Some(ProtocolId::Rc5),
-        "rc6" => Some(ProtocolId::Rc6),
-        _ => None,
+fn select_serialport(opt: Option<PathBuf>, def: &str) -> PathBuf {
+    if let Some(path) = opt {
+        path
+    } else if let Ok(ports) = serialport::available_ports() {
+        ports
+            .first()
+            .map(|port| PathBuf::from(&port.port_name))
+            .unwrap()
+    } else {
+        PathBuf::from(def)
     }
 }
-

@@ -7,20 +7,20 @@ pub enum Command {
     Idle,
     Info,
     CaptureProtocol(u32),
-    CaptureRaw,
+    Capture,
     RemoteControlSend(RemoteControlCmd),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Reply {
     Ok,
-    CaptureRawData {rawdata: RawData},
-    ProtocolData {data: GenericRemote},
+    CaptureReply { data: CaptureData },
+    CaptureProtocolReply {data: GenericRemote},
     Info {info: Info},
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct RawData {
+pub struct CaptureData {
     pub samplerate: u32,
     pub len: u32,
     pub data: [[u16; 32]; 4],

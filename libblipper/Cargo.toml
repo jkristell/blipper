@@ -10,5 +10,5 @@ heapless = "0.5.1"
 postcard = "0.4.1"
 log = "0.4.8"
 common = { path = "../common" }
-# infrared = { version = "0.5", features = ["remotes", "std"]}
-infrared = { path = "../../infrared", features = ["remotes", "std"]}
+infrared = { version = "0.6", features = ["remotes", "std"]}
+# infrared = { path = "../../infrared", features = ["remotes", "std"]}

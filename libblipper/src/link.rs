@@ -1,4 +1,4 @@
-use common::{RawData, Reply, Command};
+use common::{CaptureData, Reply, Command};
 use postcard::{from_bytes, to_vec};
 use serialport::{SerialPort, SerialPortSettings};
 use std::io;
@@ -53,7 +53,7 @@ impl SerialLink {
         let mut offset = 0;
 
         let port = self.port.as_mut().ok_or(io::ErrorKind::NotConnected)?;
-        println!("port: {:?}", port.name());
+        info!("port: {:?}", port.name());
 
         loop {
             match port.read(&mut recvbuf[offset..]) {
@@ -68,12 +68,12 @@ impl SerialLink {
 
             if let Ok(reply) = reply {
                 match reply {
-                    Reply::CaptureRawData {rawdata} => {
-                        let reply_size = 1 + std::mem::size_of::<RawData>();
+                    Reply::CaptureReply {data} => {
+                        let reply_size = 1 + std::mem::size_of::<CaptureData>();
                         if offset < reply_size {
                             continue
                         } else {
-                            return Ok(Reply::CaptureRawData {rawdata});
+                            return Ok(Reply::CaptureReply {data});
                         }
                     }
                     _ => return Ok(reply),

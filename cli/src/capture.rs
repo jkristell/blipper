@@ -1,57 +1,53 @@
-use std::path::{PathBuf, Path};
-use std::io;
 use std::fs::File;
+use std::io;
 
-use common::{
-    Command,
-    Reply,
-};
-use crate::blippervcd::BlipperVcd;
+use crate::vcdutils::VcdWriter;
+use common::{Command, Reply};
 
-use log::{info};
-use libblipper::SerialLink;
+use libblipper::{Decoder, SerialLink};
+use log::info;
 
-pub fn command_capture_raw(link: &mut SerialLink,
-                           path: Option<PathBuf>) -> io::Result<()> {
-    // Send command to device
-    link.send_command(Command::CaptureRaw)?;
-
-    if let Some(path) = path {
-        return capture_to_vcd(link, &path)
-    }
-
+pub fn command_capture(
+    link: &mut SerialLink,
+    do_decode: bool,
+    mut capture_file: Option<File>,
+) -> io::Result<()> {
     info!("Capturing");
 
+    let mut decoder = if do_decode {
+        Some(Decoder::new(40_000))
+    } else {
+        None
+    };
+
+    let mut vcd = capture_file.as_mut().map(|file| VcdWriter::new(file));
+
+    if let Some(vcd) = vcd.as_mut() {
+        vcd.init()?;
+    }
+
+    // Set device in capture mode
+    link.send_command(Command::Capture)?;
+
     loop {
-        if let Ok(Reply::CaptureRawData {rawdata}) = link.read_reply() {
-            let v = &rawdata.data.concat()[..rawdata.len as usize];
+        if let Ok(Reply::CaptureReply { data }) = link.read_reply() {
+            let v = &data.data.concat()[..data.len as usize];
 
             println!(
                 "len: {}, samplerate: {}\ndata:\n{:?}",
-                rawdata.len,
-                rawdata.samplerate,
-                v
+                data.len, data.samplerate, v
             );
-        }
-    }
-}
 
-fn capture_to_vcd(link: &mut SerialLink, path: &Path) -> io::Result<()> {
+            // Decode the data and print it
+            if let Some(decoder) = decoder.as_mut() {
+                let decoded = decoder.decode_data(v);
+                println!("Decoded: {:?}", decoded);
+            }
 
-    info!("Capture to {}", path.display());
-
-    let mut file = File::create(&path)?;
-    let mut bvcd = BlipperVcd::from_writer(
-        &mut file,
-        25,
-        &["ir"],
-    )?;
-
-    loop {
-        if let Ok(Reply::CaptureRawData {rawdata}) = link.read_reply() {
-            let v = &rawdata.data.concat()[..rawdata.len as usize];
-
-            bvcd.write_vec(v)?;
+            // Write vcd data
+            if let Some(vcd) = vcd.as_mut() {
+                vcd.write_vec(v)?;
+            }
         }
     }
 }
