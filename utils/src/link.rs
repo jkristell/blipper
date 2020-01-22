@@ -1,11 +1,12 @@
-use common::{CaptureData, Reply, Command};
-use postcard::{from_bytes, to_vec};
-use serialport::{SerialPort, SerialPortSettings};
 use std::io;
 use std::path::{Path};
-use heapless::consts::U64;
 
+use postcard::{from_bytes, to_vec};
+use serialport::{SerialPort, SerialPortSettings};
+use heapless::consts::U64;
 use log::info;
+
+use blipper_protocol::{CaptureData, Reply, Command};
 
 pub struct SerialLink {
     port: Option<Box<dyn SerialPort>>,
@@ -48,7 +49,7 @@ impl SerialLink {
             .write_all(&req)
     }
 
-    pub fn read_reply(&mut self) -> io::Result<common::Reply> {
+    pub fn read_reply(&mut self) -> io::Result<blipper_protocol::Reply> {
         let mut recvbuf = [0; 1024];
         let mut offset = 0;
 

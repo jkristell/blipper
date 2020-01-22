@@ -23,7 +23,7 @@ pub enum Reply {
 pub struct CaptureData {
     pub samplerate: u32,
     pub len: u32,
-    pub data: [[u16; 32]; 4],
+    pub bufs: [[u16; 32]; 4],
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]

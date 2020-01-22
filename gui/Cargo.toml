@@ -12,5 +12,5 @@ gtk = { version = "0.8.0", features = ["v3_22"] }
 gdk-pixbuf = "0.8.0"
 glib = "0.9"
 infrared = { version = "0.6", features = ["remotes", "std"]}
-libblipper = { path = "../libblipper" }
-common = { path = "../common" }
+blipper-utils = { path = "../utils" }
+blipper-protocol = { path = "../protocol" }

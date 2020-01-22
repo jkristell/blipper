@@ -1,8 +1,10 @@
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
-use structopt;
-use structopt::StructOpt;
+use structopt::{
+    self,
+    StructOpt,
+};
 
 use log::info;
 
@@ -11,8 +13,10 @@ mod irsend;
 mod playback;
 mod vcdutils;
 
+use blipper_utils::SerialLink;
+
 use crate::playback::command_playback;
-use libblipper::SerialLink;
+
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Blipper", about = "Blipper cli tool")]
@@ -52,14 +56,14 @@ fn main() -> io::Result<()> {
     env_logger::init();
 
     let path_serialport = select_serialport(opt.serial, "/dev/ttyACM0");
+    let mut link = SerialLink::new();
 
     match opt.cmd {
         CliCommand::Capture { path, decode } => {
-            let mut link = SerialLink::new();
             link.connect(&path_serialport)?;
 
             let vcdout = path.and_then(|path| {
-                info!("Writing to path: {:?}", path);
+                info!("Writing vcd to file: {:?}", path);
                 File::create(&path).ok()
             });
 
@@ -75,7 +79,6 @@ fn main() -> io::Result<()> {
             addr,
             cmd,
         } => {
-            let mut link = SerialLink::new();
             link.connect(&path_serialport)?;
             irsend::transmit(&mut link, protocol, addr, cmd)
         }
@@ -84,13 +87,12 @@ fn main() -> io::Result<()> {
 
 fn select_serialport(opt: Option<PathBuf>, def: &str) -> PathBuf {
     if let Some(path) = opt {
-        path
-    } else if let Ok(ports) = serialport::available_ports() {
-        ports
-            .first()
-            .map(|port| PathBuf::from(&port.port_name))
-            .unwrap()
-    } else {
-        PathBuf::from(def)
+        return path;
     }
+
+    // Use the first one available
+    serialport::available_ports()
+        .ok()
+        .and_then(|ports| ports.iter().next().map(|port| PathBuf::from(&port.port_name)))
+        .unwrap_or_else(|| PathBuf::from(def))
 }

@@ -1,11 +1,13 @@
-use common::{Reply, RawData};
-use infrared::{ProtocolId, ReceiverStateMachine, ReceiverState, Transmitter, TransmitterState, PwmTransmitter};
-use infrared::nec::{NecTransmitter, NecSamsungTransmitter, NecCommand};
-use infrared::rc5::{Rc5Transmitter, Rc5Command};
-use infrared::capture::Capture;
-
-
 use embedded_hal::PwmPin;
+
+use infrared::{
+    capture::Capture,
+    nec::{NecCommand, NecSamsungTransmitter, NecTransmitter},
+    rc5::{Rc5Command, Rc5Transmitter},
+    ProtocolId, PwmTransmitter, ReceiverState, ReceiverStateMachine, Transmitter, TransmitterState,
+};
+
+use blipper_protocol::{CaptureData, Reply};
 
 const NEC_ID: u8 = ProtocolId::Nec as u8;
 const NES_ID: u8 = ProtocolId::NecSamsung as u8;
@@ -30,16 +32,14 @@ pub struct BlipCapturer {
     pub samplerate: u32,
 }
 
-
 impl BlipCapturer {
-
     pub fn new(samplerate: u32) -> Self {
         Self {
             sm: Capture::new(samplerate),
             pinval: false,
             last_event_time: 0,
             timeout: samplerate / 10,
-            samplerate
+            samplerate,
         }
     }
 
@@ -50,9 +50,7 @@ impl BlipCapturer {
     }
 
     pub fn sample(&mut self, edge: bool, ts: u32) -> Option<Reply> {
-
         let mut res = None;
-
 
         if self.pinval != edge {
             if let ReceiverState::Done(_) = self.sm.event(edge, ts) {
@@ -64,7 +62,8 @@ impl BlipCapturer {
             self.last_event_time = ts;
             self.pinval = edge;
         } else {
-            if self.last_event_time != 0 && ts.wrapping_sub(self.last_event_time) > self.timeout
+            if self.last_event_time != 0
+                && ts.wrapping_sub(self.last_event_time) > self.timeout
                 && self.sm.n_edges > 0
             {
                 // Timeout
@@ -79,10 +78,6 @@ impl BlipCapturer {
     }
 }
 
-
-
-
-
 pub struct Transmitters {
     nec: NecTransmitter,
     nes: NecSamsungTransmitter,
@@ -90,11 +85,8 @@ pub struct Transmitters {
     active: u8,
 }
 
-
 impl Transmitters {
-
     fn new(samplerate: u32) -> Self {
-
         Self {
             nec: NecTransmitter::new(samplerate),
             nes: NecSamsungTransmitter::new(samplerate),
@@ -104,18 +96,27 @@ impl Transmitters {
     }
 
     pub fn load(&mut self, tid: u8, addr: u16, cmd: u8) {
-
         self.active = tid;
 
         match tid {
-            NEC_ID => self.nec.load(NecCommand { addr: addr, cmd: cmd }),
-            NES_ID => self.nes.load(NecCommand { addr: addr, cmd: cmd }),
+            NEC_ID => self.nec.load(NecCommand {
+                addr: addr,
+                cmd: cmd,
+            }),
+            NES_ID => self.nes.load(NecCommand {
+                addr: addr,
+                cmd: cmd,
+            }),
             RC5_ID => self.rc5.load(Rc5Command::new(addr as u8, cmd, false)),
             _ => (),
         }
     }
 
-    fn step<PWM: PwmPin<Duty=DUTY>, DUTY>(&mut self, sample: u32, pwm: &mut PWM) -> TransmitterState {
+    fn step<PWM: PwmPin<Duty = DUTY>, DUTY>(
+        &mut self,
+        sample: u32,
+        pwm: &mut PWM,
+    ) -> TransmitterState {
         match self.active {
             NEC_ID => self.nec.pwmstep(sample, pwm),
             NES_ID => self.nes.pwmstep(sample, pwm),
@@ -127,9 +128,7 @@ impl Transmitters {
 
 pub struct Blip {
     pub state: State,
-
     pub capturer: BlipCapturer,
-
     pub txers: Transmitters,
     pub samplerate: u32,
 }
@@ -144,32 +143,35 @@ impl Blip {
         }
     }
 
-
-    pub fn irsend<D, PWM: PwmPin<Duty=D>>(&mut self, samplenum: u32, pwm: &mut PWM) -> bool {
-
+    fn irsend<D, PWM: PwmPin<Duty = D>>(&mut self, samplenum: u32, pwm: &mut PWM) -> bool {
         let state = self.txers.step(samplenum, pwm);
         match state {
-            TransmitterState::Idle => false,
             TransmitterState::Transmit(send) => send,
-            TransmitterState::Error => false,
+            TransmitterState::Idle | TransmitterState::Error => false,
+        }
+    }
+
+    pub fn tick<D, PWM: PwmPin<Duty = D>>(&mut self, timestamp: u32, level: bool, pwm: &mut PWM) -> Option<Reply> {
+        match self.state {
+            State::Idle => None,
+            State::IrSend => { self.irsend(timestamp, pwm); None}
+            State::CaptureRaw => self.capturer.sample(level, timestamp)
         }
     }
 }
 
 fn traceresult_to_reply(samplerate: u32, buf: &[u16]) -> Reply {
-
-    let mut rawdata = RawData {
+    let mut data = CaptureData {
         samplerate,
-        data: [[0; 32]; 4],
+        bufs: [[0; 32]; 4],
         len: buf.len() as u32,
     };
 
     for i in 0..buf.len() {
         let idx = i % 32;
         let bufidx = i / 32;
-        rawdata.data[bufidx][idx] = buf[i];
+        data.bufs[bufidx][idx] = buf[i];
     }
 
-    Reply::CaptureRawData { rawdata }
+    Reply::CaptureReply { data }
 }
-

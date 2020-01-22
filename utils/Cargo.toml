@@ -1,5 +1,5 @@
 [package]
-name = "libblipper"
+name = "blipper-utils"
 version = "0.1.0"
 authors = ["Johan Kristell <johan@jott.se>"]
 edition = "2018"
@@ -9,6 +9,6 @@ serialport = "3.3.0"
 heapless = "0.5.1"
 postcard = "0.4.1"
 log = "0.4.8"
-common = { path = "../common" }
+blipper-protocol = { path = "../protocol" }
 infrared = { version = "0.6", features = ["remotes", "std"]}
 # infrared = { path = "../../infrared", features = ["remotes", "std"]}

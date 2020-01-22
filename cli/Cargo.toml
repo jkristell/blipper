@@ -13,5 +13,5 @@ structopt = "0.3"
 heapless = "0.5.1"
 postcard = "0.4.1"
 infrared = { version = "0.6", features = ["protocol-debug", "embedded-hal"]}
-common = { path = "../common" }
-libblipper = { path = "../libblipper" }
+blipper-protocol = { path = "../protocol" }
+blipper-utils = { path = "../utils" }

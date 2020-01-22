@@ -1,11 +1,11 @@
 use std::fs::File;
 use std::io;
 
-use crate::vcdutils::VcdWriter;
-use common::{Command, Reply};
-
-use libblipper::{Decoder, SerialLink};
 use log::info;
+
+use blipper_protocol::{Command, Reply};
+use blipper_utils::{Decoder, SerialLink};
+use crate::vcdutils::VcdWriter;
 
 pub fn command_capture(
     link: &mut SerialLink,
@@ -31,7 +31,7 @@ pub fn command_capture(
 
     loop {
         if let Ok(Reply::CaptureReply { data }) = link.read_reply() {
-            let v = &data.data.concat()[..data.len as usize];
+            let v = &data.bufs.concat()[..data.len as usize];
 
             println!(
                 "len: {}, samplerate: {}\ndata:\n{:?}",

@@ -35,7 +35,11 @@ pub fn command_playback(name: &str, path: &Path) -> io::Result<()> {
     }
 }
 
-pub fn play_vcd<RECV, CMD>(vcdvec: &[(u64, bool)], recv: &mut RECV, _debug: bool) -> io::Result<()>
+pub fn play_vcd<RECV, CMD>(
+    vcdvec: &[(u64, bool)],
+    recv: &mut RECV,
+    _debug: bool
+) -> io::Result<()>
 where
     RECV: ReceiverStateMachine<Cmd = CMD>,
     CMD: Debug + Command,
