@@ -34,14 +34,20 @@ pub fn command_capture(
             let v = &data.bufs.concat()[..data.len as usize];
 
             println!(
-                "len: {}, samplerate: {}\ndata:\n{:?}",
-                data.len, data.samplerate, v
+                "len: {}, samplerate: {}\ndata: {:?}",
+                data.len,
+                data.samplerate,
+                v
             );
 
             // Decode the data and print it
             if let Some(decoder) = decoder.as_mut() {
                 let decoded = decoder.decode_data(v);
-                println!("Decoded: {:?}", decoded);
+                if let Some(data) = decoded {
+                    println!("Decoded: {:?}", data);
+                } else {
+                    println!("Decoded: None");
+                }
             }
 
             // Write vcd data

@@ -1,23 +1,31 @@
 use infrared::{
-    ProtocolId, Command, ReceiverStateMachine, ReceiverState,
-    rc5::Rc5,
-    rc6::Rc6,
-    nec::*,
-    sbp::*,
+    recv::{
+        Receiver,
+        State,
+    },
+    protocols::{
+        ProtocolId,
+        rc5::Rc5,
+        rc6::Rc6,
+        nec::*,
+        sbp::*,
+        //denon::Denon,
+    },
     remotes::std::RemoteControlData,
+    Command
 };
 
 
 #[derive(Debug)]
 pub struct DecodedButton {
     pub protocol: ProtocolId,
-    pub address: u16,
-    pub command: u8,
+    pub address: u32,
+    pub command: u32,
     pub remotes: Vec<RemoteControlData>,
 }
 
 impl DecodedButton {
-    fn new(protocol: ProtocolId, address: u16, command: u8) -> Self {
+    fn new(protocol: ProtocolId, address: u32, command: u32) -> Self {
         Self {
             protocol,
             address,
@@ -33,6 +41,7 @@ pub struct Decoder {
     nec: Nec,
     nes: NecSamsung,
     sbp: Sbp,
+    //denon: Denon,
 }
 
 impl Decoder {
@@ -45,6 +54,7 @@ impl Decoder {
             nec: Nec::new(samplerate),
             nes: NecSamsung::new(samplerate),
             sbp: Sbp::new(samplerate),
+            //denon: Denon::for_samplerate(samplerate),
         }
     }
 
@@ -75,6 +85,12 @@ impl Decoder {
             if let Some(cmd) = sample(&mut self.sbp, rising, t) {
                 return Some(cmd);
             }
+
+            /*
+            if let Some(cmd) = sample_denon(&mut self.denon, rising, t) {
+                return Some(cmd);
+            }
+            */
         }
         None
     }
@@ -83,16 +99,36 @@ impl Decoder {
 fn sample<RECEIVER, CMD>(recv: &mut RECEIVER, edge: bool, t: u32) -> Option<DecodedButton>
 where
     CMD: Command,
-    RECEIVER: ReceiverStateMachine<Cmd=CMD>,
+    RECEIVER: Receiver<Cmd=CMD>,
 {
     match recv.event(edge, t) {
-        ReceiverState::Done(cmd) => {
+        State::Done(cmd) => {
+            recv.reset();
+            return Some(DecodedButton::new(RECEIVER::ID,
+                                           cmd.address().into(),
+                                           cmd.data().into()))
+        }
+        State::Error(_err) => {
+            recv.reset();
+        }
+        _ => {}
+    }
 
+    None
+}
+
+/*
+fn sample_denon(recv: &mut Denon, edge: bool, t: u32) -> Option<DecodedButton>{
+
+    match recv.event(edge, t) {
+        State::Done(cmd) => {
             recv.reset();
 
-            return Some(DecodedButton::new(RECEIVER::ID,
+            println!("Denon: {:X} {:#b}", cmd.raw, cmd.raw);
+
+            return Some(DecodedButton::new(Denon::ID,
                                            cmd.address(),
-                                           cmd.command()))
+                                           cmd.command()));
         }
         ReceiverState::Error(_err) => {
             recv.reset();
@@ -102,12 +138,13 @@ where
 
     None
 }
+*/
 
 // Specialization for NEC
 fn sample_nec(recv: &mut Nec, edge: bool, t: u32) -> Option<DecodedButton>
 {
     match recv.event(edge, t) {
-        ReceiverState::Done(_neccmd) => {
+        State::Done(_neccmd) => {
 
             let bits = recv.bitbuf;
             let cmd;
@@ -129,10 +166,10 @@ fn sample_nec(recv: &mut Nec, edge: bool, t: u32) -> Option<DecodedButton>
             recv.reset();
 
             return Some(DecodedButton::new(proto,
-                                           cmd.address(),
-                                           cmd.command()))
+                                           cmd.address().into(),
+                                           cmd.data().into()))
         }
-        ReceiverState::Error(_err) => {
+        State::Error(_err) => {
             recv.reset();
         }
         _ => {}

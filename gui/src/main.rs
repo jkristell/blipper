@@ -19,13 +19,15 @@ use infrared::remotes::{
     std::RemoteControlData,
 };
 
-use libblipper::{
+use blipper_utils::{
     link::SerialLink,
     decoder::{
         Decoder,
         DecodedButton,
     },
 };
+
+use blipper_protocol as common;
 
 struct TransmitPanel {
     rcselect: ComboBoxText,
@@ -130,7 +132,7 @@ impl BlipperGui {
 
         let cmd = common::RemoteControlCmd {
             txid: remote.protocol as u8,
-            addr: remote.addr,
+            addr: remote.addr as u16,
             cmd: cmd,
         };
 

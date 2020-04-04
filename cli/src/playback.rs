@@ -4,10 +4,18 @@ use std::path::Path;
 
 use log::warn;
 
-use infrared::nec::Nec;
-use infrared::rc5::Rc5;
-use infrared::rc6::Rc6;
-use infrared::{Command, ReceiverState, ReceiverStateMachine};
+use infrared::{
+    Command,
+    recv::{
+        Receiver,
+        State,
+    },
+    protocols::{
+        nec::Nec,
+        rc5::Rc5,
+        rc6::Rc6,
+    },
+};
 
 use crate::vcdutils::vcdfile_to_vec;
 
@@ -17,7 +25,7 @@ pub fn command_playback(name: &str, path: &Path) -> io::Result<()> {
 
     match name {
         "nes" => {
-            let mut nec = Nec::for_samplerate(samplerate);
+            let mut nec = Nec::new(samplerate);
             play_vcd(&v, &mut nec, debug)
         }
         "rc5" => {
@@ -41,7 +49,7 @@ pub fn play_vcd<RECV, CMD>(
     _debug: bool
 ) -> io::Result<()>
 where
-    RECV: ReceiverStateMachine<Cmd = CMD>,
+    RECV: Receiver<Cmd = CMD>,
     CMD: Debug + Command,
 {
     use std::convert::TryFrom;
@@ -54,12 +62,12 @@ where
     for (t, value) in iter {
         let state = recv.event(value, t);
 
-        if let ReceiverState::Done(ref cmd) = state {
+        if let State::Done(ref cmd) = state {
             println!("Cmd: {:?} ", cmd);
             recv.reset();
         }
 
-        if let ReceiverState::Error(err) = state {
+        if let State::Error(err) = state {
             println!("Error: {:?}", err);
             recv.reset();
         }

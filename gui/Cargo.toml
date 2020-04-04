@@ -11,6 +11,6 @@ gio = "0.8"
 gtk = { version = "0.8.0", features = ["v3_22"] }
 gdk-pixbuf = "0.8.0"
 glib = "0.9"
-infrared = { version = "0.6", features = ["remotes", "std"]}
+infrared = { path = "../../infrared", features = ["remotes", "std"]}
 blipper-utils = { path = "../utils" }
 blipper-protocol = { path = "../protocol" }
