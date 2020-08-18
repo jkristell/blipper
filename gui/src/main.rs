@@ -1,11 +1,8 @@
 use std::env::args;
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::{thread, time, io};
-
-use log::info;
 
 use glib::{self, clone};
 use gio::prelude::*;
@@ -194,7 +191,7 @@ impl BlipperGui {
                 link.send_command(common::Command::Info)
                     .map_err(|_err| gui.statusbar_label.set_markup("Error Sending")).ok();
             },
-            Err(err) => gui.statusbar_label.set_markup(&format!("<b>{}</b>", err.description())),
+            Err(err) => gui.statusbar_label.set_markup(&format!("<b>{}</b>", err)),
         }
     }
 }
@@ -202,7 +199,7 @@ impl BlipperGui {
 
 fn build_ui(application: &gtk::Application) {
     let glade_src = include_str!("blipper.glade");
-    let builder = Builder::new_from_string(glade_src);
+    let builder = Builder::from_string(glade_src);
 
     let window: ApplicationWindow = builder.get_object("window1").unwrap();
 
@@ -269,12 +266,12 @@ fn build_ui(application: &gtk::Application) {
         let mut decoder = Decoder::new(samplerate);
 
         match reply {
-            common::Reply::CaptureReply {rawdata} => {
+            common::Reply::CaptureReply {data} => {
 
                 let panel = &blippergui.borrow().decoder_panel;
 
-                let v = rawdata.data.concat();
-                let s = &v[0..rawdata.len as usize];
+                let v = data.bufs.concat();
+                let s = &v[0..data.len as usize];
                 let maybe_cmd: Option<DecodedButton> = decoder.decode_data(s);
 
                 println!("{:?}", maybe_cmd);
@@ -323,7 +320,7 @@ fn button_from_standardbutton(standardbutton: StandardButton) -> Button {
 
     if let Some(name) = standardbutton_to_icon_name(standardbutton) {
 
-        let pixbuf = Pixbuf::new_from_file_at_scale(&format!("icons/{}.svg", name),
+        let pixbuf = Pixbuf::from_file_at_scale(&format!("icons/{}.svg", name),
                                                     24,
                                                     24,
                                                     true).ok();
@@ -338,17 +335,17 @@ fn button_from_standardbutton(standardbutton: StandardButton) -> Button {
     let label = format!("{:?}", standardbutton);
 
     let button = match standardbutton {
-        StandardButton::Zero => Button::new_with_label("0"),
-        StandardButton::One => Button::new_with_label("1"),
-        StandardButton::Two => Button::new_with_label("2"),
-        StandardButton::Three => Button::new_with_label("3"),
-        StandardButton::Four => Button::new_with_label("4"),
-        StandardButton::Five => Button::new_with_label("5"),
-        StandardButton::Six => Button::new_with_label("6"),
-        StandardButton::Seven => Button::new_with_label("7"),
-        StandardButton::Eight => Button::new_with_label("8"),
-        StandardButton::Nine => Button::new_with_label("9"),
-        _ => Button::new_with_label(&label)
+        StandardButton::Zero => Button::with_label("0"),
+        StandardButton::One => Button::with_label("1"),
+        StandardButton::Two => Button::with_label("2"),
+        StandardButton::Three => Button::with_label("3"),
+        StandardButton::Four => Button::with_label("4"),
+        StandardButton::Five => Button::with_label("5"),
+        StandardButton::Six => Button::with_label("6"),
+        StandardButton::Seven => Button::with_label("7"),
+        StandardButton::Eight => Button::with_label("8"),
+        StandardButton::Nine => Button::with_label("9"),
+        _ => Button::with_label(&label)
     };
 
     button
