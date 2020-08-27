@@ -4,7 +4,7 @@
 use cortex_m::asm::delay;
 use cortex_m_semihosting::hprintln;
 use panic_semihosting as _;
-use rtfm::app;
+use rtic::app;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
 use usb_device::bus;
@@ -15,9 +15,9 @@ use stm32f1xx_hal::{
     gpio::{gpiob::PB8, Floating, Input},
     pac,
     prelude::*,
-    pwm::{Pwm, C4},
+    pwm::{PwmChannel, C4},
     stm32::TIM4,
-    timer::{self, CountDownTimer, Timer},
+    timer::{self, CountDownTimer, Timer, Tim4NoRemap},
 };
 
 use blipper_protocol::{Command, Info, Reply};
@@ -37,7 +37,7 @@ const APP: () = {
         recvbuf: Vec<u8, U64>,
         timer2: CountDownTimer<pac::TIM2>,
         irpin: PB8<Input<Floating>>,
-        pwm: Pwm<TIM4, C4>,
+        pwm: PwmChannel<TIM4, C4>,
         blip: blip::Blip,
     }
 
@@ -97,16 +97,23 @@ const APP: () = {
         let mut gpiob = device.GPIOB.split(&mut rcc.apb2);
         let irpin = gpiob.pb8.into_floating_input(&mut gpiob.crh);
 
-        // pwm
+        // PWM
         let mut afio = device.AFIO.constrain(&mut rcc.apb2);
         let irled = gpiob.pb9.into_alternate_push_pull(&mut gpiob.crh);
 
-        let mut c4 = Timer::tim4(device.TIM4, &clocks, &mut rcc.apb1)
-            .pwm(irled, &mut afio.mapr, 38.khz());
+        let pwm = Timer::tim4(device.TIM4, &clocks, &mut rcc.apb1).pwm::<Tim4NoRemap, _, _, _>(
+            irled,
+            &mut afio.mapr,
+            38.khz(),
+        );
 
-        // Set the duty cycle of channel 0 to 50%
-        c4.set_duty(c4.get_max_duty() / 2);
-        c4.disable();
+
+        let mut pwmpin = pwm.split();
+
+        pwmpin.set_duty(pwmpin.get_max_duty() / 2);
+        pwmpin.disable();
+
+
 
         init::LateResources {
             usbdev,
@@ -114,7 +121,7 @@ const APP: () = {
             recvbuf: Default::default(),
             timer2: timer,
             irpin,
-            pwm: c4,
+            pwm: pwmpin,
             blip: blip::Blip::new(SAMPLERATE),
         }
     }
