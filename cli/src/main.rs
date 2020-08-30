@@ -10,12 +10,13 @@ use log::info;
 
 mod capture;
 mod irsend;
-mod playback;
+//mod playback;
 mod vcdutils;
 
 use blipper_utils::SerialLink;
+use env_logger::Env;
 
-use crate::playback::command_playback;
+//use crate::playback::command_playback;
 
 
 #[derive(Debug, StructOpt)]
@@ -53,13 +54,14 @@ enum CliCommand {
 fn main() -> io::Result<()> {
     let opt = Opt::from_args();
 
-    env_logger::init();
+    env_logger::from_env(Env::default().default_filter_or("info")).init();
 
     let path_serialport = select_serialport(opt.serial, "/dev/ttyACM0");
     let mut link = SerialLink::new();
 
     match opt.cmd {
         CliCommand::Capture { path, decode } => {
+            info!("Capture");
             link.connect(&path_serialport)?;
 
             let vcdout = path.and_then(|path| {
@@ -72,7 +74,7 @@ fn main() -> io::Result<()> {
         CliCommand::PlaybackVcd {
             protocol_string,
             path,
-        } => command_playback(&protocol_string, &path),
+        } => Ok(()), //command_playback(&protocol_string, &path),
         CliCommand::Protocol { .. } => Ok(()),
         CliCommand::Transmit {
             protocol,

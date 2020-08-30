@@ -1,10 +1,10 @@
 #![no_main]
 #![no_std]
 
-use cortex_m::asm::delay;
-use cortex_m_semihosting::hprintln;
-use panic_semihosting as _;
+use cortex_m::asm;
 use rtic::app;
+use rtt_target::{rprintln, rtt_init_print};
+
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
 use usb_device::bus;
@@ -29,6 +29,21 @@ mod blip;
 const VERSION: u32 = 1;
 const SAMPLERATE: u32 = 40_000;
 
+
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    rprintln!("{}", info);
+    exit()
+}
+
+
+fn exit() -> ! {
+    loop {
+        asm::bkpt() // halt = exit probe-run
+    }
+}
+
+
 #[app(device = stm32f1xx_hal::pac, peripherals = true)]
 const APP: () = {
     struct Resources {
@@ -45,6 +60,8 @@ const APP: () = {
     fn init(ctx: init::Context) -> init::LateResources {
         static mut USB_BUS: Option<bus::UsbBusAllocator<UsbBusType>> = None;
 
+        rtt_init_print!();
+
         let device = ctx.device;
         let mut flash = device.FLASH.constrain();
         let mut rcc = device.RCC.constrain();
@@ -58,13 +75,15 @@ const APP: () = {
 
         assert!(clocks.usbclk_valid());
 
+        rprintln!("Hello world");
+
         let mut gpioa = device.GPIOA.split(&mut rcc.apb2);
 
         // BluePill board has a pull-up resistor on the D+ line.
         // Pull the D+ pin down to send a RESET condition to the USB bus.
         let mut usb_dp = gpioa.pa12.into_push_pull_output(&mut gpioa.crh);
         let _ = usb_dp.set_low().ok();
-        delay(clocks.sysclk().0 / 100);
+        asm::delay(clocks.sysclk().0 / 100);
 
         let usb_dm = gpioa.pa11;
         let usb_dp = usb_dp.into_floating_input(&mut gpioa.crh);
@@ -75,7 +94,9 @@ const APP: () = {
             pin_dp: usb_dp,
         };
 
+
         *USB_BUS = Some(UsbBus::new(usb));
+        //let serial = SerialPort::new(USB_BUS.as_ref().unwrap());
         let serial = SerialPort::new(USB_BUS.as_ref().unwrap());
 
         let usbdev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x16c0, 0x27dd))
@@ -107,13 +128,9 @@ const APP: () = {
             38.khz(),
         );
 
-
         let mut pwmpin = pwm.split();
-
         pwmpin.set_duty(pwmpin.get_max_duty() / 2);
         pwmpin.disable();
-
-
 
         init::LateResources {
             usbdev,
@@ -128,7 +145,7 @@ const APP: () = {
 
     #[idle]
     fn idle(_ctx: idle::Context) -> ! {
-        let _ = hprintln!("Ready!").ok();
+        rprintln!("Setup done: in idle");
         loop {
             continue;
         }
@@ -197,6 +214,47 @@ const APP: () = {
     }
 };
 
+fn parse_command(buf: &[u8]) -> Option<Command> {
+    match from_bytes::<Command>(buf) {
+        Ok(cmd) => Some(cmd),
+        Err(err) => {
+            rprintln!("Cmd error: {}", err);
+            None
+        },
+    }
+}
+
+fn handle_command(cmd: Command, blip: &mut blip::Blip) -> Reply {
+    match cmd {
+        Command::Idle => {
+            blip.state = blip::State::Idle;
+            Reply::Ok
+        }
+        Command::Info => {
+            Reply::Info {
+                info: Info {
+                    version: VERSION,
+                    transmitters: 0, //blip::ENABLED_TRANSMITTERS,
+                },
+            }
+        }
+        Command::Capture => {
+            blip.capturer.reset();
+            blip.state = blip::State::CaptureRaw;
+            Reply::Ok
+        }
+        Command::CaptureProtocol(_id) => {
+            rprintln!("CaptureProtocol not implemented");
+            Reply::Ok
+        }
+        Command::RemoteControlSend(cmd) => {
+            //blip.txers.load(cmd.txid, cmd.addr, cmd.cmd);
+            blip.state = blip::State::IrSend;
+            Reply::Ok
+        }
+    }
+}
+
 fn usb_poll<B: bus::UsbBus>(
     usbdev: &mut UsbDevice<'static, B>,
     serial: &mut SerialPort<'static, B>,
@@ -207,49 +265,26 @@ fn usb_poll<B: bus::UsbBus>(
         return;
     }
 
-    let mut tmpbuf = [0u8; 32];
+    let mut data = [0u8; 64];
 
-    match serial.read(&mut tmpbuf) {
+    match serial.read(&mut data) {
         Ok(count) if count > 0 => {
-            let _ = buf.extend_from_slice(&tmpbuf);
+            rprintln!("count = {}", count);
+            buf.extend_from_slice(&data).unwrap();
+
+            if let Some(cmd) = parse_command(&data) {
+
+                rprintln!("Cmd: {:?}", cmd);
+
+                let reply = handle_command(cmd, blip);
+                usb_send_reply(serial, &reply);
+            }
+
         }
-        _ => {}
+        Ok(_) => (),
+        Err(e) => rprintln!("serial err: {:?}", e),
     }
 
-    match from_bytes::<Command>(&buf) {
-        Ok(cmd) => match cmd {
-            Command::Idle => {
-                let _ = hprintln!("cmd idle").ok();
-                blip.state = blip::State::Idle;
-                usb_send_reply(serial, &Reply::Ok);
-            }
-            Command::Info => {
-                let info: Info = Info {
-                    version: VERSION,
-                    transmitters: blip::ENABLED_TRANSMITTERS,
-                };
-                let _ = hprintln!("info").ok();
-                usb_send_reply(serial, &Reply::Info { info });
-            }
-            Command::Capture => {
-                let _ = hprintln!("State: capture").ok();
-                blip.capturer.reset();
-
-                blip.state = blip::State::CaptureRaw;
-            }
-            Command::CaptureProtocol(id) => {
-                let _ = hprintln!("Not implemented: {}", id);
-            }
-            Command::RemoteControlSend(cmd) => {
-                let _ = hprintln!("sending").ok();
-                usb_send_reply(serial, &Reply::Ok);
-
-                blip.txers.load(cmd.txid, cmd.addr, cmd.cmd);
-                blip.state = blip::State::IrSend;
-            }
-        },
-        Err(_) => {}
-    };
 
     buf.clear();
 }
@@ -268,6 +303,5 @@ fn usb_write<B: bus::UsbBus>(serial: &mut SerialPort<'static, B>, towrite: &[u8]
 
 fn usb_send_reply<B: bus::UsbBus>(serial: &mut SerialPort<'static, B>, reply: &Reply) {
     let replybytes: heapless::Vec<u8, U1024> = to_vec(&reply).unwrap();
-
     usb_write(serial, &replybytes);
 }

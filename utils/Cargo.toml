@@ -7,8 +7,8 @@ edition = "2018"
 [dependencies]
 serialport = "3.3.0"
 heapless = "0.5.1"
-postcard = "0.4.1"
+postcard = "0.5.1"
 log = "0.4.8"
 blipper-protocol = { path = "../protocol" }
 # infrared = { version = "0.6", features = ["remotes", "std"]}
-infrared = { path = "../../infrared", features = ["remotes", "std"]}
+infrared = { path = "../../infrared", default-features = false, features = ["nec"] }

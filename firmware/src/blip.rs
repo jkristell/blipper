@@ -1,21 +1,24 @@
 use embedded_hal::PwmPin;
 
 use infrared::{
-    capture::Capture,
-    nec::{NecCommand, NecSamsungTransmitter, NecTransmitter},
-    rc5::{Rc5Command, Rc5Transmitter},
-    ProtocolId, PwmTransmitter, ReceiverState, ReceiverStateMachine, Transmitter, TransmitterState,
+    protocols::{
+        capture::Capturing,
+        nec::{NecCommand, NecSamsungTransmitter, NecTransmitter},
+    },
+    recv::{self, ReceiverSM},
+    //rc5::{Rc5Command, Rc5Transmitter},
+    //PwmTransmitter, ReceiverState, ReceiverStateMachine, Transmitter, TransmitterState,
 };
 
 use blipper_protocol::{CaptureData, Reply};
 
-const NEC_ID: u8 = ProtocolId::Nec as u8;
-const NES_ID: u8 = ProtocolId::NecSamsung as u8;
-const RC5_ID: u8 = ProtocolId::Rc5 as u8;
-#[allow(dead_code)]
-const RC6_ID: u8 = ProtocolId::Rc6 as u8;
+//const NEC_ID: u8 = ProtocolId::Nec as u8;
+//const NES_ID: u8 = ProtocolId::NecSamsung as u8;
+//const RC5_ID: u8 = ProtocolId::Rc5 as u8;
+//#[allow(dead_code)]
+//const RC6_ID: u8 = ProtocolId::Rc6 as u8;
 
-pub const ENABLED_TRANSMITTERS: u32 = 1 << NEC_ID | 1 << NES_ID | 1 << RC5_ID;
+//pub const ENABLED_TRANSMITTERS: u32 = 1 << NEC_ID | 1 << NES_ID | 1 << RC5_ID;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum State {
@@ -25,7 +28,7 @@ pub enum State {
 }
 
 pub struct BlipCapturer {
-    pub sm: Capture,
+    pub sm: Capturing,
     pub pinval: bool,
     pub last_event_time: u32,
     pub timeout: u32,
@@ -35,7 +38,7 @@ pub struct BlipCapturer {
 impl BlipCapturer {
     pub fn new(samplerate: u32) -> Self {
         Self {
-            sm: Capture::new(samplerate),
+            sm: Capturing::new(samplerate),
             pinval: false,
             last_event_time: 0,
             timeout: samplerate / 10,
@@ -53,7 +56,7 @@ impl BlipCapturer {
         let mut res = None;
 
         if self.pinval != edge {
-            if let ReceiverState::Done(_) = self.sm.event(edge, ts) {
+            if let recv::State::Done = self.sm.event(edge, ts) {
                 res = Some(traceresult_to_reply(self.samplerate, self.sm.edges()));
                 // Reset the state machine
                 self.sm.reset();
@@ -78,6 +81,7 @@ impl BlipCapturer {
     }
 }
 
+/*
 pub struct Transmitters {
     nec: NecTransmitter,
     nes: NecSamsungTransmitter,
@@ -98,6 +102,7 @@ impl Transmitters {
     pub fn load(&mut self, tid: u8, addr: u16, cmd: u8) {
         self.active = tid;
 
+        /*
         match tid {
             NEC_ID => self.nec.load(NecCommand {
                 addr: addr,
@@ -110,8 +115,11 @@ impl Transmitters {
             RC5_ID => self.rc5.load(Rc5Command::new(addr as u8, cmd, false)),
             _ => (),
         }
+
+         */
     }
 
+    /*
     fn step<PWM: PwmPin<Duty = DUTY>, DUTY>(
         &mut self,
         sample: u32,
@@ -124,12 +132,14 @@ impl Transmitters {
             _ => TransmitterState::Idle,
         }
     }
+     */
 }
+ */
 
 pub struct Blip {
     pub state: State,
     pub capturer: BlipCapturer,
-    pub txers: Transmitters,
+    //pub txers: Transmitters,
     pub samplerate: u32,
 }
 
@@ -138,11 +148,12 @@ impl Blip {
         Blip {
             state: State::Idle,
             capturer: BlipCapturer::new(samplerate),
-            txers: Transmitters::new(samplerate),
+            //txers: Transmitters::new(samplerate),
             samplerate,
         }
     }
 
+    /*
     fn irsend<D, PWM: PwmPin<Duty = D>>(&mut self, samplenum: u32, pwm: &mut PWM) -> bool {
         let state = self.txers.step(samplenum, pwm);
         match state {
@@ -150,11 +161,12 @@ impl Blip {
             TransmitterState::Idle | TransmitterState::Error => false,
         }
     }
+     */
 
     pub fn tick<D, PWM: PwmPin<Duty = D>>(&mut self, timestamp: u32, level: bool, pwm: &mut PWM) -> Option<Reply> {
         match self.state {
             State::Idle => None,
-            State::IrSend => { self.irsend(timestamp, pwm); None}
+            State::IrSend => None, //{ self.irsend(timestamp, pwm); None}
             State::CaptureRaw => self.capturer.sample(level, timestamp)
         }
     }

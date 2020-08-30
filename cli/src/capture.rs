@@ -28,6 +28,7 @@ pub fn command_capture(
 
     // Set device in capture mode
     link.send_command(Command::Capture)?;
+    link.reply_ok()?;
 
     loop {
         if let Ok(Reply::CaptureReply { data }) = link.read_reply() {
@@ -40,6 +41,8 @@ pub fn command_capture(
                 v
             );
 
+            /*
+
             // Decode the data and print it
             if let Some(decoder) = decoder.as_mut() {
                 let decoded = decoder.decode_data(v);
@@ -49,6 +52,8 @@ pub fn command_capture(
                     println!("Decoded: None");
                 }
             }
+
+             */
 
             // Write vcd data
             if let Some(vcd) = vcd.as_mut() {

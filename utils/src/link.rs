@@ -54,7 +54,7 @@ impl SerialLink {
         let mut offset = 0;
 
         let port = self.port.as_mut().ok_or(io::ErrorKind::NotConnected)?;
-        info!("port: {:?}", port.name());
+        //info!("port: {:?}", port.name());
 
         loop {
             match port.read(&mut recvbuf[offset..]) {
