@@ -30,7 +30,7 @@ features = ["rt", "stm32-usbd", "stm32f103", "medium"]
 # version ="0.6.0"
 default-features = false
 path = "../../infrared"
-features = ["embedded-hal", "nec"]
+features = ["embedded-hal", "nec", "remotes"]
 
 [profile.dev]
 opt-level = 1

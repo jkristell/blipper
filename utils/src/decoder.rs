@@ -1,19 +1,10 @@
-use infrared::{
-    recv::{
-        Receiver,
-        State,
-    },
-    protocols::{
-        //rc5::Rc5,
-        //rc6::Rc6,
-        nec::*,
-        //sbp::*,
-        //denon::Denon,
-    },
-    //remotes::std::RemoteControlData,
-    Command
-};
-use infrared::recv::ReceiverSM;
+use infrared::{protocols::{
+    //rc5::Rc5,
+    //rc6::Rc6,
+    nec::*,
+    //sbp::*,
+    //denon::Denon,
+}, Command, Receiver};
 
 /*
 #[derive(Debug)]
@@ -51,14 +42,14 @@ impl Decoder {
         Self {
             //rc5: Rc5::new(samplerate),
             //rc6: Rc6::new(samplerate),
-            nec: Receiver::with_samplerate(Nec::new(40_000), 40_000),
+            nec: Receiver::new(1_000_000),
             //nes: NecSamsung::new(samplerate),
             //sbp: Sbp::new(samplerate),
             //denon: Denon::for_samplerate(samplerate),
         }
     }
 
-    pub fn decode_data(&mut self, edges: &[u16]) {
+    pub fn decode_data(&mut self, edges: &[u16]) -> Option<NecCommand> {
         let mut t: u32 = 0;
         let mut rising = false;
 
@@ -77,8 +68,9 @@ impl Decoder {
 
              */
 
-            sample_nec(&mut self.nec, rising, t);
-                //return Some(cmd);
+            if let Some(cmd) = sample_nec(&mut self.nec, rising, t) {
+                return Some(cmd);
+            }
 
             /*
             if let Some(cmd) = sample(&mut self.nes, rising, t) {
@@ -97,7 +89,7 @@ impl Decoder {
             }
             */
         }
-        //None
+        None
     }
 }
 
@@ -149,10 +141,13 @@ fn sample_denon(recv: &mut Denon, edge: bool, t: u32) -> Option<DecodedButton>{
 */
 
 // Specialization for NEC
-fn sample_nec(recv: &mut Receiver<Nec>, edge: bool, t: u32) {
+fn sample_nec(recv: &mut Receiver<Nec>, edge: bool, t: u32) -> Option<NecCommand> {
 
-    if let Some(cmd) = recv.event(edge, t) {
+    if let Ok(Some(cmd)) = recv.edge_event(edge, t) {
         println!("cmd: {:?}", cmd);
+        Some(cmd)
+    } else {
+        None
     }
 
     /*

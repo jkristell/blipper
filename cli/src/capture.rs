@@ -41,11 +41,10 @@ pub fn command_capture(
                 v
             );
 
-            /*
 
             // Decode the data and print it
             if let Some(decoder) = decoder.as_mut() {
-                let decoded = decoder.decode_data(v);
+                let decoded = decoder.decode_data(&v[0..]);
                 if let Some(data) = decoded {
                     println!("Decoded: {:?}", data);
                 } else {
@@ -53,7 +52,6 @@ pub fn command_capture(
                 }
             }
 
-             */
 
             // Write vcd data
             if let Some(vcd) = vcd.as_mut() {

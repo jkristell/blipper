@@ -1,11 +1,13 @@
 use embedded_hal::PwmPin;
 
 use infrared::{
-    protocols::{
-        capture::Capturing,
-        nec::{NecCommand, NecSamsungTransmitter, NecTransmitter},
-    },
-    recv::{self, ReceiverSM},
+    PolledReceiver,
+    Capturing,
+    //protocols::{
+    //    capture::Capturing,
+    //    nec::{NecCommand, NecSamsungTransmitter, NecTransmitter},
+    //},
+    //recv::{self, ReceiverSM},
     //rc5::{Rc5Command, Rc5Transmitter},
     //PwmTransmitter, ReceiverState, ReceiverStateMachine, Transmitter, TransmitterState,
 };
@@ -28,9 +30,8 @@ pub enum State {
 }
 
 pub struct BlipCapturer {
-    pub sm: Capturing,
-    pub pinval: bool,
-    pub last_event_time: u32,
+    pub capture_receiver: PolledReceiver<Capturing>,
+    pub last_cmd: u32,
     pub timeout: u32,
     pub samplerate: u32,
 }
@@ -38,45 +39,40 @@ pub struct BlipCapturer {
 impl BlipCapturer {
     pub fn new(samplerate: u32) -> Self {
         Self {
-            sm: Capturing::new(samplerate),
-            pinval: false,
-            last_event_time: 0,
+            capture_receiver: PolledReceiver::new(samplerate),
+            last_cmd: 0,
             timeout: samplerate / 10,
             samplerate,
         }
     }
 
     pub fn reset(&mut self) {
-        self.pinval = false;
-        self.last_event_time = 0;
-        self.sm.reset();
+        self.last_cmd = 0;
+        self.capture_receiver.reset();
     }
 
     pub fn sample(&mut self, edge: bool, ts: u32) -> Option<Reply> {
         let mut res = None;
 
-        if self.pinval != edge {
-            if let recv::State::Done = self.sm.event(edge, ts) {
-                res = Some(traceresult_to_reply(self.samplerate, self.sm.edges()));
-                // Reset the state machine
-                self.sm.reset();
-            }
-
-            self.last_event_time = ts;
-            self.pinval = edge;
-        } else {
-            if self.last_event_time != 0
-                && ts.wrapping_sub(self.last_event_time) > self.timeout
-                && self.sm.n_edges > 0
-            {
-                // Timeout
-                res = Some(traceresult_to_reply(self.samplerate, self.sm.edges()));
-                // Reset the state machine
-                self.sm.reset();
-            }
+        if let Ok(Some(_cmd)) = self.capture_receiver.poll(edge, ts) {
+            let events = self.capture_receiver.recv.sm.edges();
+            res = Some(traceresult_to_reply(1_000_000, events));
+            self.last_cmd = ts;
         }
 
-        self.pinval = edge;
+        // Check for timeout
+
+        if self.last_cmd != 0
+            && ts.wrapping_sub(self.last_cmd) > self.timeout
+            && self.capture_receiver.recv.sm.n_edges > 0
+        {
+            // Timeout
+            let events = self.capture_receiver.recv.sm.edges();
+            res = Some(traceresult_to_reply(1_000_000, events));
+
+            self.capture_receiver.reset();
+        }
+
         res
     }
 }

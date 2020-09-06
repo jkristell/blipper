@@ -65,7 +65,7 @@ impl SerialLink {
 
 
             let reply = from_bytes::<Reply>(&recvbuf);
-            info!("reply: {:?}", reply);
+            //info!("reply: {:?}", reply);
 
             if let Ok(reply) = reply {
                 match reply {
