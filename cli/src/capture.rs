@@ -14,7 +14,7 @@ pub fn command_capture(
     info!("Capturing");
 
     let mut decoder = if do_decode {
-        Some(Decoder::new(1_000_000))
+        Some(Decoder::new(40_000))
     } else {
         None
     };

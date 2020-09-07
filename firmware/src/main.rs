@@ -171,7 +171,7 @@ const APP: () = {
         timer2.clear_update_interrupt_flag();
 
         if let Some(reply) = blip.tick(*TS, level, pwm) {
-            ctx.spawn.send_reply(reply).unwrap();
+            let _ = ctx.spawn.send_reply(reply);
         }
 
         // Update our timestamp

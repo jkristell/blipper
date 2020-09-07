@@ -1,4 +1,4 @@
-use infrared::{protocols::nec::*, Command, Receiver, ReceiverSM, Rc5, Nec, ReceiverKind, Rc6, Sbp};
+use infrared::{protocols::nec::*, Command, Receiver, ReceiverSM, Rc5, Nec, ReceiverKind, Rc6, Sbp, BufferedReceiver};
 
 #[derive(Debug)]
 pub struct DecodedButton {
@@ -34,7 +34,7 @@ impl Decoder {
         let mut res = Vec::new();
 
         for dist in edges {
-            t += u32::from(*dist);
+            t = u32::from(*dist);
             rising = !rising;
 
             if let Some(cmd) = sample(&mut self.rc5, rising, t) {
@@ -43,7 +43,7 @@ impl Decoder {
             if let Some(cmd) = sample(&mut self.rc6, rising, t) {
                 res.push(cmd);
             }
-            if let Some(cmd) = sample_nec(&mut self.nec, rising, t) {
+            if let Some(cmd) = sample_nec(&mut self.nec, rising, *dist as u32) {
                 res.push(cmd);
             }
             if let Some(cmd) = sample(&mut self.nes, rising, t) {
@@ -62,7 +62,7 @@ where
     CMD: Command,
     SM: ReceiverSM<Cmd = CMD> + Default,
 {
-    let r = recv.edge_event(edge, t);
+    let r = recv.edge_event_dt(edge, t);
 
     if let Ok(Some(cmd)) = r {
         return Some(DecodedButton {
@@ -101,7 +101,7 @@ fn sample_denon(recv: &mut Denon, edge: bool, t: u32) -> Option<DecodedButton>{
 
 // Specialization for NEC
 fn sample_nec(recv: &mut Receiver<Nec>, edge: bool, t: u32) -> Option<DecodedButton> {
-    if let Ok(Some(cmd)) = recv.edge_event(edge, t) {
+    if let Ok(Some(cmd)) = recv.edge_event_dt(edge, t) {
         println!("cmd: {:?}", cmd);
         Some(DecodedButton {
             command: cmd.data(),
