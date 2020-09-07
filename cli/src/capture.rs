@@ -1,11 +1,10 @@
 use std::fs::File;
 use std::io;
-
 use log::info;
 
+use crate::vcdutils::VcdWriter;
 use blipper_protocol::{Command, Reply};
 use blipper_utils::{Decoder, SerialLink};
-use crate::vcdutils::VcdWriter;
 
 pub fn command_capture(
     link: &mut SerialLink,
@@ -15,7 +14,7 @@ pub fn command_capture(
     info!("Capturing");
 
     let mut decoder = if do_decode {
-        Some(Decoder::new(40_000))
+        Some(Decoder::new(1_000_000))
     } else {
         None
     };
@@ -32,30 +31,26 @@ pub fn command_capture(
 
     loop {
         if let Ok(Reply::CaptureReply { data }) = link.read_reply() {
-            let v = &data.bufs.concat()[..data.len as usize];
+            let concated = &data.bufs.concat()[..data.len as usize];
 
             println!(
                 "len: {}, samplerate: {}\ndata: {:?}",
                 data.len,
                 data.samplerate,
-                v
+                concated
             );
-
 
             // Decode the data and print it
             if let Some(decoder) = decoder.as_mut() {
-                let decoded = decoder.decode_data(&v[0..]);
-                if let Some(data) = decoded {
-                    println!("Decoded: {:?}", data);
-                } else {
-                    println!("Decoded: None");
+                let decoded = decoder.decode_data(concated);
+                for cmd in decoded {
+                    println!("Decoded: {:?}", cmd);
                 }
             }
 
-
             // Write vcd data
             if let Some(vcd) = vcd.as_mut() {
-                vcd.write_vec(v)?;
+                vcd.write_vec(concated)?;
             }
         }
     }

@@ -1,10 +1,7 @@
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
-use structopt::{
-    self,
-    StructOpt,
-};
+use structopt::{self, StructOpt};
 
 use log::info;
 
@@ -17,7 +14,6 @@ use blipper_utils::SerialLink;
 use env_logger::Env;
 
 //use crate::playback::command_playback;
-
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Blipper", about = "Blipper cli tool")]
@@ -95,6 +91,11 @@ fn select_serialport(opt: Option<PathBuf>, def: &str) -> PathBuf {
     // Use the first one available
     serialport::available_ports()
         .ok()
-        .and_then(|ports| ports.iter().next().map(|port| PathBuf::from(&port.port_name)))
+        .and_then(|ports| {
+            ports
+                .iter()
+                .next()
+                .map(|port| PathBuf::from(&port.port_name))
+        })
         .unwrap_or_else(|| PathBuf::from(def))
 }

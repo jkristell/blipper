@@ -1,5 +1,5 @@
-pub mod link;
 pub mod decoder;
+pub mod link;
 
-pub use link::SerialLink;
 pub use decoder::Decoder;
+pub use link::SerialLink;

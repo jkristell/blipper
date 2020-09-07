@@ -1,121 +1,80 @@
-use infrared::{protocols::{
-    //rc5::Rc5,
-    //rc6::Rc6,
-    nec::*,
-    //sbp::*,
-    //denon::Denon,
-}, Command, Receiver};
+use infrared::{protocols::nec::*, Command, Receiver, ReceiverSM, Rc5, Nec, ReceiverKind, Rc6, Sbp};
 
-/*
 #[derive(Debug)]
 pub struct DecodedButton {
     pub address: u32,
     pub command: u32,
-    pub remotes: Vec<RemoteControlData>,
+    pub kind: ReceiverKind,
 }
-
-impl DecodedButton {
-    fn new(protocol: ProtocolId, address: u32, command: u32) -> Self {
-        Self {
-            address,
-            command,
-            remotes: vec![]
-        }
-    }
-}
-
- */
 
 pub struct Decoder {
-    //rc5: Rc5,
-    //rc6: Rc6,
+    rc5: Receiver<Rc5>,
+    rc6: Receiver<Rc6>,
     nec: Receiver<Nec>,
-    //nes: NecSamsung,
-    //sbp: Sbp,
+    nes: Receiver<NecSamsung>,
+    sbp: Receiver<Sbp>,
     //denon: Denon,
 }
 
 impl Decoder {
-
     pub fn new(samplerate: u32) -> Self {
-
         Self {
-            //rc5: Rc5::new(samplerate),
-            //rc6: Rc6::new(samplerate),
-            nec: Receiver::new(1_000_000),
-            //nes: NecSamsung::new(samplerate),
-            //sbp: Sbp::new(samplerate),
-            //denon: Denon::for_samplerate(samplerate),
+            rc5: Receiver::new(samplerate),
+            rc6: Receiver::new(samplerate),
+            nec: Receiver::new(samplerate),
+            nes: Receiver::new(samplerate),
+            sbp: Receiver::new(samplerate),
         }
     }
 
-    pub fn decode_data(&mut self, edges: &[u16]) -> Option<NecCommand> {
+    pub fn decode_data(&mut self, edges: &[u16]) -> Vec<DecodedButton> {
         let mut t: u32 = 0;
         let mut rising = false;
+
+        let mut res = Vec::new();
 
         for dist in edges {
             t += u32::from(*dist);
             rising = !rising;
 
-            /*
             if let Some(cmd) = sample(&mut self.rc5, rising, t) {
-                return Some(cmd);
+                res.push(cmd);
             }
-
             if let Some(cmd) = sample(&mut self.rc6, rising, t) {
-                return Some(cmd);
+                res.push(cmd);
             }
-
-             */
-
             if let Some(cmd) = sample_nec(&mut self.nec, rising, t) {
-                return Some(cmd);
+                res.push(cmd);
             }
-
-            /*
             if let Some(cmd) = sample(&mut self.nes, rising, t) {
-                return Some(cmd);
+                res.push(cmd);
             }
-
             if let Some(cmd) = sample(&mut self.sbp, rising, t) {
-                return Some(cmd);
+                res.push(cmd);
             }
-
-             */
-
-            /*
-            if let Some(cmd) = sample_denon(&mut self.denon, rising, t) {
-                return Some(cmd);
-            }
-            */
         }
-        None
+        res
     }
 }
 
-/*
-fn sample<RECEIVER, CMD>(recv: &mut RECEIVER, edge: bool, t: u32) -> Option<DecodedButton>
+fn sample<SM, CMD>(recv: &mut Receiver<SM>, edge: bool, t: u32) -> Option<DecodedButton>
 where
     CMD: Command,
-    RECEIVER: Receiver<Cmd=CMD>,
+    SM: ReceiverSM<Cmd = CMD> + Default,
 {
-    match recv.event(edge, t) {
-        State::Done(cmd) => {
-            recv.reset();
-            return Some(DecodedButton::new(RECEIVER::ID,
-                                           cmd.address().into(),
-                                           cmd.data().into()))
-        }
-        State::Error(_err) => {
-            recv.reset();
-        }
-        _ => {}
+    let r = recv.edge_event(edge, t);
+
+    if let Ok(Some(cmd)) = r {
+        return Some(DecodedButton {
+            address: cmd.address(),
+            command: cmd.data(),
+            kind: SM::KIND,
+        })
     }
 
     None
 }
 
- */
 
 /*
 fn sample_denon(recv: &mut Denon, edge: bool, t: u32) -> Option<DecodedButton>{
@@ -141,11 +100,14 @@ fn sample_denon(recv: &mut Denon, edge: bool, t: u32) -> Option<DecodedButton>{
 */
 
 // Specialization for NEC
-fn sample_nec(recv: &mut Receiver<Nec>, edge: bool, t: u32) -> Option<NecCommand> {
-
+fn sample_nec(recv: &mut Receiver<Nec>, edge: bool, t: u32) -> Option<DecodedButton> {
     if let Ok(Some(cmd)) = recv.edge_event(edge, t) {
         println!("cmd: {:?}", cmd);
-        Some(cmd)
+        Some(DecodedButton {
+            command: cmd.data(),
+            address: cmd.address(),
+            kind: ReceiverKind::Nec,
+        })
     } else {
         None
     }
@@ -183,6 +145,4 @@ fn sample_nec(recv: &mut Receiver<Nec>, edge: bool, t: u32) -> Option<NecCommand
         _ => {}
     }
      */
-
 }
-

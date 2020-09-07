@@ -11,4 +11,4 @@ postcard = "0.5.1"
 log = "0.4.8"
 blipper-protocol = { path = "../protocol" }
 # infrared = { version = "0.6", features = ["remotes", "std"]}
-infrared = { path = "../../infrared", default-features = false, features = ["nec"] }
+infrared = { path = "../../infrared" }

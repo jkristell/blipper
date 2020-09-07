@@ -1,27 +1,21 @@
+use std::cell::RefCell;
 use std::env::args;
 use std::rc::Rc;
-use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
-use std::{thread, time, io};
+use std::{io, thread, time};
 
-use glib::{self, clone};
-use gio::prelude::*;
-use gtk::prelude::*;
-use gtk::{ApplicationWindow, Builder, Button, ListStore, Grid, ComboBoxText, Label, Image};
-use gtk::GridExt;
 use gdk_pixbuf::Pixbuf;
+use gio::prelude::*;
+use glib::{self, clone};
+use gtk::prelude::*;
+use gtk::GridExt;
+use gtk::{ApplicationWindow, Builder, Button, ComboBoxText, Grid, Image, Label, ListStore};
 
-use infrared::remotes::{
-    StandardButton,
-    std::RemoteControlData,
-};
+use infrared::remotes::{std::RemoteControlData, StandardButton};
 
 use blipper_utils::{
+    decoder::{DecodedButton, Decoder},
     link::SerialLink,
-    decoder::{
-        Decoder,
-        DecodedButton,
-    },
 };
 
 use blipper_protocol as common;
@@ -43,7 +37,6 @@ struct DecoderPanel {
     command: Label,
 }
 
-
 struct BlipperGui {
     arclink: Arc<Mutex<SerialLink>>,
     remotes: Vec<RemoteControlData>,
@@ -54,16 +47,14 @@ struct BlipperGui {
     decoder_panel: DecoderPanel,
 }
 
-
 impl BlipperGui {
-
-    fn new(remotes: Vec<RemoteControlData>,
-           statusbar_label: Label,
-           transmit_panel: TransmitPanel,
-           info_panel: InfoPanel,
-           decoder_panel: DecoderPanel,
+    fn new(
+        remotes: Vec<RemoteControlData>,
+        statusbar_label: Label,
+        transmit_panel: TransmitPanel,
+        info_panel: InfoPanel,
+        decoder_panel: DecoderPanel,
     ) -> Rc<RefCell<BlipperGui>> {
-
         let blippergui = BlipperGui {
             arclink: Arc::new(Mutex::new(SerialLink::new())),
             remotes,
@@ -74,7 +65,7 @@ impl BlipperGui {
             decoder_panel,
         };
 
-        let model = ListStore::new(&[String::static_type(), glib::Type::U32,]);
+        let model = ListStore::new(&[String::static_type(), glib::Type::U32]);
         for (idx, remote) in blippergui.remotes.iter().enumerate() {
             let text = format!("{} ({:?})", remote.model, remote.protocol);
             model.set(&model.append(), &[0, 1], &[&text, &(idx as u32)]);
@@ -101,7 +92,6 @@ impl BlipperGui {
             });
         }
 
-
         {
             let combo = &refcelled.borrow().transmit_panel.rcselect;
 
@@ -124,7 +114,6 @@ impl BlipperGui {
     }
 
     fn send_command(&mut self, cmd: u8) -> io::Result<()> {
-
         let remote = &self.remotes[self.selected];
 
         let cmd = common::RemoteControlCmd {
@@ -135,11 +124,13 @@ impl BlipperGui {
 
         println!("Sending command: {:?}", cmd);
 
-        self.arclink.lock().unwrap().send_command(common::Command::RemoteControlSend(cmd))
+        self.arclink
+            .lock()
+            .unwrap()
+            .send_command(common::Command::RemoteControlSend(cmd))
     }
 
     fn update_button_grid(self_rc: Rc<RefCell<BlipperGui>>) {
-
         let gui = self_rc.borrow_mut();
 
         let button_grid = Grid::new();
@@ -151,7 +142,6 @@ impl BlipperGui {
         let mapping = &gui.remotes[gui.selected].mapping;
 
         for (i, (cmdid, standardbutton)) in mapping.iter().cloned().enumerate() {
-
             let button = button_from_standardbutton(standardbutton);
 
             let blippergui = self_rc.clone();
@@ -173,7 +163,8 @@ impl BlipperGui {
         let mut link = gui.arclink.lock().unwrap();
 
         link.send_command(common::Command::Capture)
-            .map_err(|_err| gui.statusbar_label.set_markup("Error Sending")).ok();
+            .map_err(|_err| gui.statusbar_label.set_markup("Error Sending"))
+            .ok();
     }
 
     fn connect(self_rc: Rc<RefCell<BlipperGui>>) {
@@ -186,16 +177,17 @@ impl BlipperGui {
 
         match res {
             Ok(_) => {
-                gui.statusbar_label.set_markup("Connected to <b>/dev/ttyACM0</b>");
+                gui.statusbar_label
+                    .set_markup("Connected to <b>/dev/ttyACM0</b>");
 
                 link.send_command(common::Command::Info)
-                    .map_err(|_err| gui.statusbar_label.set_markup("Error Sending")).ok();
-            },
+                    .map_err(|_err| gui.statusbar_label.set_markup("Error Sending"))
+                    .ok();
+            }
             Err(err) => gui.statusbar_label.set_markup(&format!("<b>{}</b>", err)),
         }
     }
 }
-
 
 fn build_ui(application: &gtk::Application) {
     let glade_src = include_str!("blipper.glade");
@@ -226,14 +218,15 @@ fn build_ui(application: &gtk::Application) {
     window.set_application(Some(application));
 
     let remotes = infrared::remotes::std::remotes();
-    let blippergui = BlipperGui::new(remotes,
-                                     statusbar_label,
-                                     transmit_panel,
-                                     info_panel,
-                                     decoder_panel);
+    let blippergui = BlipperGui::new(
+        remotes,
+        statusbar_label,
+        transmit_panel,
+        info_panel,
+        decoder_panel,
+    );
 
     let link_clone = blippergui.borrow().arclink.clone();
-
 
     connect_button.connect_clicked(clone!(@weak blippergui => move |_button| {
         BlipperGui::connect(blippergui);
@@ -243,17 +236,15 @@ fn build_ui(application: &gtk::Application) {
     let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
     // Spawn the thread and move the sender in there
-    thread::spawn(move || {
-        loop {
-            thread::sleep(time::Duration::from_millis(10));
+    thread::spawn(move || loop {
+        thread::sleep(time::Duration::from_millis(10));
 
-            {
-                let mut link = link_clone.lock().unwrap();
-                let res = link.read_reply();
+        {
+            let mut link = link_clone.lock().unwrap();
+            let res = link.read_reply();
 
-                if let Ok(reply) = res {
-                    let _ = sender.send(reply);
-                }
+            if let Ok(reply) = res {
+                let _ = sender.send(reply);
             }
         }
     });
@@ -261,13 +252,11 @@ fn build_ui(application: &gtk::Application) {
     // Attach the receiver to the default main context (None)
     // and on every message update the label accordingly.
     receiver.attach(None, move |reply: common::Reply| {
-
         let samplerate = 40_000;
         let mut decoder = Decoder::new(samplerate);
 
         match reply {
-            common::Reply::CaptureReply {data} => {
-
+            common::Reply::CaptureReply { data } => {
                 let panel = &blippergui.borrow().decoder_panel;
 
                 let v = data.bufs.concat();
@@ -277,19 +266,29 @@ fn build_ui(application: &gtk::Application) {
                 println!("{:?}", maybe_cmd);
 
                 if let Some(button) = maybe_cmd {
-                    panel.protocol.set_markup(&format!("<b>Protocol:</b> {:?}", button.protocol));
-                    panel.address.set_markup(&format!("<b>Address:</b> {:?}", button.address));
-                    panel.command.set_markup(&format!("<b>Command:</b> {:?}", button.command));
+                    panel
+                        .protocol
+                        .set_markup(&format!("<b>Protocol:</b> {:?}", button.protocol));
+                    panel
+                        .address
+                        .set_markup(&format!("<b>Address:</b> {:?}", button.address));
+                    panel
+                        .command
+                        .set_markup(&format!("<b>Command:</b> {:?}", button.command));
                 }
-            },
-            common::Reply::Info {info} => {
+            }
+            common::Reply::Info { info } => {
                 let info_panel = &blippergui.borrow().info_panel;
 
-                info_panel.version.set_markup(&format!("<b>Version:</b> {}", info.version));
-                info_panel.protocols.set_markup(&format!("<b>Protocols:</b> {}", info.transmitters));
+                info_panel
+                    .version
+                    .set_markup(&format!("<b>Version:</b> {}", info.version));
+                info_panel
+                    .protocols
+                    .set_markup(&format!("<b>Protocols:</b> {}", info.transmitters));
 
                 println!("{:?}", info)
-            },
+            }
             common::Reply::Ok => println!("Ok"),
             _ => println!("Unhandled reply"),
         }
@@ -301,13 +300,11 @@ fn build_ui(application: &gtk::Application) {
 }
 
 fn main() {
-
     env_logger::init();
 
-    let application = gtk::Application::new(
-        Some("com.github.jkristell.blipper.gui"),
-        Default::default(),
-    ).expect("Initialization failed...");
+    let application =
+        gtk::Application::new(Some("com.github.jkristell.blipper.gui"), Default::default())
+            .expect("Initialization failed...");
 
     application.connect_activate(|app| {
         build_ui(app);
@@ -317,13 +314,8 @@ fn main() {
 }
 
 fn button_from_standardbutton(standardbutton: StandardButton) -> Button {
-
     if let Some(name) = standardbutton_to_icon_name(standardbutton) {
-
-        let pixbuf = Pixbuf::from_file_at_scale(&format!("icons/{}.svg", name),
-                                                    24,
-                                                    24,
-                                                    true).ok();
+        let pixbuf = Pixbuf::from_file_at_scale(&format!("icons/{}.svg", name), 24, 24, true).ok();
         let image = Image::new();
         image.set_from_pixbuf(pixbuf.as_ref());
 
@@ -345,7 +337,7 @@ fn button_from_standardbutton(standardbutton: StandardButton) -> Button {
         StandardButton::Seven => Button::with_label("7"),
         StandardButton::Eight => Button::with_label("8"),
         StandardButton::Nine => Button::with_label("9"),
-        _ => Button::with_label(&label)
+        _ => Button::with_label(&label),
     };
 
     button
@@ -387,7 +379,6 @@ fn standardbutton_to_icon_name(standardbutton: StandardButton) -> Option<&'stati
         Subtitle => Some("subtitles"),
         Info => Some("info"),
 
-
         _ => None,
         /*
         Teletext => {}
@@ -413,5 +404,5 @@ fn standardbutton_to_icon_name(standardbutton: StandardButton) -> Option<&'stati
         PitchMinus => {}
         Prog => {}
         */
-    }
+    };
 }

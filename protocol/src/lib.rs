@@ -15,8 +15,8 @@ pub enum Command {
 pub enum Reply {
     Ok,
     CaptureReply { data: CaptureData },
-    CaptureProtocolReply {data: GenericRemote},
-    Info {info: Info},
+    CaptureProtocolReply { data: GenericRemote },
+    Info { info: Info },
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -45,4 +45,3 @@ pub struct Info {
     /// Bitfield of transmitters
     pub transmitters: u32,
 }
-
