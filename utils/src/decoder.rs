@@ -1,10 +1,10 @@
-use infrared::{protocols::nec::*, Command, Receiver, ReceiverSM, Rc5, Nec, ReceiverKind, Rc6, Sbp, BufferedReceiver};
+use infrared::{protocols::*, Command, Receiver, ReceiverSM, BufferedReceiver, CommandKind};
 
 #[derive(Debug)]
 pub struct DecodedButton {
     pub address: u32,
     pub command: u32,
-    pub kind: ReceiverKind,
+    pub kind: CommandKind,
 }
 
 pub struct Decoder {
@@ -68,7 +68,7 @@ where
         return Some(DecodedButton {
             address: cmd.address(),
             command: cmd.data(),
-            kind: SM::KIND,
+            kind: cmd.kind(),
         })
     }
 
@@ -106,7 +106,7 @@ fn sample_nec(recv: &mut Receiver<Nec>, edge: bool, t: u32) -> Option<DecodedBut
         Some(DecodedButton {
             command: cmd.data(),
             address: cmd.address(),
-            kind: ReceiverKind::Nec,
+            kind: cmd.kind(),
         })
     } else {
         None

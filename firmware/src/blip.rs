@@ -1,6 +1,6 @@
 use embedded_hal::PwmPin;
 
-use infrared::{Capturing, PeriodicReceiver};
+use infrared::{PeriodicReceiver};
 
 use blipper_protocol::{CaptureData, Reply};
 
@@ -20,7 +20,6 @@ pub enum State {
 }
 
 pub struct BlipCapturer {
-    pub capture_receiver: PeriodicReceiver<Capturing>,
     pub ts_last_cmd: u32,
     pub timeout: u32,
     pub samplerate: u32,
@@ -33,7 +32,6 @@ pub struct BlipCapturer {
 impl BlipCapturer {
     pub fn new(samplerate: u32) -> Self {
         Self {
-            capture_receiver: PeriodicReceiver::new(samplerate),
             ts_last_cmd: 0,
             timeout: samplerate / 10,
             samplerate,
@@ -46,7 +44,6 @@ impl BlipCapturer {
 
     pub fn reset(&mut self) {
         self.ts_last_cmd = 0;
-        self.capture_receiver.reset();
     }
 
     pub fn sample(&mut self, edge: bool, ts: u32) -> Option<Reply> {
@@ -57,7 +54,6 @@ impl BlipCapturer {
                 && self.last_edge != 0
                 && ts.wrapping_sub(self.last_edge) > self.timeout {
 
-                self.buf[0] = 0;
                 let res = Some(traceresult_to_reply(self.samplerate,
                                                  &self.buf[0..self.i]));
                 self.i = 0;
