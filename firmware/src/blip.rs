@@ -78,31 +78,6 @@ impl BlipCapturer {
         }
 
         None
-
-        /*
-        if let Ok(Some(cmd)) = self.capture_receiver.poll(edge, ts) {
-            let events = &cmd.edges;
-            let n_egdes = cmd.n_edges;
-            self.ts_last_cmd = ts;
-        }
-
-        // Check for timeout
-
-        if self.ts_last_cmd != 0
-            && ts.wrapping_sub(self.ts_last_cmd) > self.timeout
-            && self.capture_receiver.recv.sm.n_edges > 0
-        {
-            // Timeout
-            let events = self.capture_receiver.recv.sm.edges();
-            res = Some(traceresult_to_reply(1_000_000, events));
-
-            self.capture_receiver.reset();
-            self.ts_last_cmd = ts;
-        }
-
-        res
-
-         */
     }
 }
 
