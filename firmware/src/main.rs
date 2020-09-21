@@ -4,6 +4,7 @@
 use cortex_m::asm;
 use rtic::app;
 use rtt_target::{rprintln, rtt_init_print};
+use panic_rtt_target as _;
 
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
@@ -26,23 +27,7 @@ use postcard::{from_bytes, to_vec};
 
 mod blip;
 
-const VERSION: u32 = 1;
 const SAMPLERATE: u32 = 40_000;
-
-
-#[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
-    rprintln!("{}", info);
-    exit()
-}
-
-
-fn exit() -> ! {
-    loop {
-        asm::bkpt() // halt = exit probe-run
-    }
-}
-
 
 #[app(device = stm32f1xx_hal::pac, peripherals = true)]
 const APP: () = {
@@ -224,36 +209,6 @@ fn parse_command(buf: &[u8]) -> Option<Command> {
     }
 }
 
-fn handle_command(cmd: Command, blip: &mut blip::Blip) -> Reply {
-    match cmd {
-        Command::Idle => {
-            blip.state = blip::State::Idle;
-            Reply::Ok
-        }
-        Command::Info => {
-            Reply::Info {
-                info: Info {
-                    version: VERSION,
-                    transmitters: 0, //blip::ENABLED_TRANSMITTERS,
-                },
-            }
-        }
-        Command::Capture => {
-            blip.capturer.reset();
-            blip.state = blip::State::CaptureRaw;
-            Reply::Ok
-        }
-        Command::CaptureProtocol(_id) => {
-            rprintln!("CaptureProtocol not implemented");
-            Reply::Ok
-        }
-        Command::RemoteControlSend(cmd) => {
-            //blip.txers.load(cmd.txid, cmd.addr, cmd.cmd);
-            blip.state = blip::State::IrSend;
-            Reply::Ok
-        }
-    }
-}
 
 fn usb_poll<B: bus::UsbBus>(
     usbdev: &mut UsbDevice<'static, B>,
@@ -273,10 +228,8 @@ fn usb_poll<B: bus::UsbBus>(
             buf.extend_from_slice(&data).unwrap();
 
             if let Some(cmd) = parse_command(&data) {
-
                 rprintln!("Cmd: {:?}", cmd);
-
-                let reply = handle_command(cmd, blip);
+                let reply = blip.handle_command(cmd);
                 usb_send_reply(serial, &reply);
             }
 

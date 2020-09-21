@@ -11,8 +11,9 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 cortex-m = "0.6"
-cortex-m-rt = {version = "0.6.12", features = ["device"]}
+cortex-m-rt = {version = "0.6.13", features = ["device"]}
 rtt-target = { version = "0.2.2", features = ["cortex-m"] }
+panic-rtt-target = { version = "0.1.1", features = ["cortex-m"] }
 
 usb-device = "0.2.5"
 usbd-serial = "0.1.0"

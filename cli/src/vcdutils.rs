@@ -6,7 +6,7 @@ use std::path::Path;
 use vcd::{self, SimulationCommand, TimescaleUnit, Value};
 
 pub struct VcdWriter<'a> {
-    vcd: vcd::Writer<'a>,
+    vcd: vcd::Writer<&'a mut File>,
     timestamp: u64,
     wire_id: vcd::IdCode,
 }

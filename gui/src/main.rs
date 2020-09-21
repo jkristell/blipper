@@ -11,10 +11,13 @@ use gtk::prelude::*;
 use gtk::GridExt;
 use gtk::{ApplicationWindow, Builder, Button, ComboBoxText, Grid, Image, Label, ListStore};
 
-use infrared::remotes::{std::RemoteControlData, StandardButton};
+use infrared::{
+    Button as StandardButton,
+    remotes::{std::RemoteControlData}
+};
 
 use blipper_utils::{
-    decoder::{DecodedButton, Decoder},
+    decoder::{DecodedCommand, Decoders},
     link::SerialLink,
 };
 
@@ -67,7 +70,7 @@ impl BlipperGui {
 
         let model = ListStore::new(&[String::static_type(), glib::Type::U32]);
         for (idx, remote) in blippergui.remotes.iter().enumerate() {
-            let text = format!("{} ({:?})", remote.model, remote.protocol);
+            let text = format!("{}", remote.model);
             model.set(&model.append(), &[0, 1], &[&text, &(idx as u32)]);
         }
 
@@ -117,7 +120,7 @@ impl BlipperGui {
         let remote = &self.remotes[self.selected];
 
         let cmd = common::RemoteControlCmd {
-            txid: remote.protocol as u8,
+            txid: 1, //remote.protocol as u8,
             addr: remote.addr as u16,
             cmd: cmd,
         };
@@ -253,7 +256,7 @@ fn build_ui(application: &gtk::Application) {
     // and on every message update the label accordingly.
     receiver.attach(None, move |reply: common::Reply| {
         let samplerate = 40_000;
-        let mut decoder = Decoder::new(samplerate);
+        let mut decoder = Decoders;
 
         match reply {
             common::Reply::CaptureReply { data } => {
@@ -261,14 +264,14 @@ fn build_ui(application: &gtk::Application) {
 
                 let v = data.bufs.concat();
                 let s = &v[0..data.len as usize];
-                let maybe_cmd: Option<DecodedButton> = decoder.decode_data(s);
+                let maybe_cmd: Option<DecodedCommand> = decoder.decode_data(s, samplerate).pop();
 
                 println!("{:?}", maybe_cmd);
 
                 if let Some(button) = maybe_cmd {
                     panel
                         .protocol
-                        .set_markup(&format!("<b>Protocol:</b> {:?}", button.protocol));
+                        .set_markup(&format!("<b>Protocol:</b> {:?}", button.kind));
                     panel
                         .address
                         .set_markup(&format!("<b>Address:</b> {:?}", button.address));

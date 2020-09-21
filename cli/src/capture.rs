@@ -4,7 +4,7 @@ use log::info;
 
 use crate::vcdutils::VcdWriter;
 use blipper_protocol::{Command, Reply};
-use blipper_utils::{Decoder, SerialLink};
+use blipper_utils::{Decoders, SerialLink};
 
 pub fn command_capture(
     link: &mut SerialLink,
@@ -14,7 +14,7 @@ pub fn command_capture(
     info!("Capturing");
 
     let mut decoder = if do_decode {
-        Some(Decoder::new(40_000))
+        Some(Decoders)
     } else {
         None
     };
@@ -42,7 +42,7 @@ pub fn command_capture(
 
             // Decode the data and print it
             if let Some(decoder) = decoder.as_mut() {
-                let decoded = decoder.decode_data(concated);
+                let decoded = decoder.decode_data(concated, data.samplerate);
                 for cmd in decoded {
                     println!("Decoded: {:?}", cmd);
                 }
