@@ -21,7 +21,7 @@ use stm32f1xx_hal::{
     timer::{self, CountDownTimer, Timer, Tim4NoRemap},
 };
 
-use blipper_protocol::{Command, Info, Reply};
+use blipper_protocol::{Command, Reply};
 use heapless::{consts::*, Vec};
 use postcard::{from_bytes, to_vec};
 
@@ -60,8 +60,6 @@ const APP: () = {
 
         assert!(clocks.usbclk_valid());
 
-        rprintln!("Hello world");
-
         let mut gpioa = device.GPIOA.split(&mut rcc.apb2);
 
         // BluePill board has a pull-up resistor on the D+ line.
@@ -78,7 +76,6 @@ const APP: () = {
             pin_dm: usb_dm,
             pin_dp: usb_dp,
         };
-
 
         *USB_BUS = Some(UsbBus::new(usb));
         //let serial = SerialPort::new(USB_BUS.as_ref().unwrap());
@@ -140,7 +137,7 @@ const APP: () = {
     fn send_reply(ctx: send_reply::Context, reply: Reply) {
         let mut serial = ctx.resources.serial;
         let reply_vec: heapless::Vec<u8, U512> = to_vec(&reply).unwrap();
-        usb_write(&mut serial, &reply_vec);
+        serial_send(&mut serial, &reply_vec);
     }
 
     #[task(
@@ -163,25 +160,12 @@ const APP: () = {
         *TS = TS.wrapping_add(1);
     }
 
-    #[task(
-        binds = USB_HP_CAN_TX,
-        resources = [usbdev, serial, recvbuf, blip]
-    )]
-    fn usb_tx(ctx: usb_tx::Context) {
-        let usb_tx::Resources { usbdev, serial, recvbuf, blip } = ctx.resources;
-
-        usb_poll(
-            usbdev,
-            serial,
-            recvbuf,
-            blip,
-        );
-    }
-
-    #[task(
-        binds = USB_LP_CAN_RX0,
-        resources = [usbdev, serial, recvbuf, blip]
-    )]
+    #[task(binds = USB_LP_CAN_RX0, resources = [
+        usbdev,
+        serial,
+        recvbuf,
+        blip
+    ])]
     fn usb_rx(ctx: usb_rx::Context) {
         let usb_rx::Resources { usbdev, serial, recvbuf, blip } = ctx.resources;
 
@@ -199,11 +183,11 @@ const APP: () = {
     }
 };
 
-fn parse_command(buf: &[u8]) -> Option<Command> {
+fn cmd_from_buf(buf: &[u8]) -> Option<Command> {
     match from_bytes::<Command>(buf) {
         Ok(cmd) => Some(cmd),
         Err(err) => {
-            rprintln!("Cmd error: {}", err);
+            rprintln!("Cmd parse error: {}", err);
             None
         },
     }
@@ -213,7 +197,7 @@ fn parse_command(buf: &[u8]) -> Option<Command> {
 fn usb_poll<B: bus::UsbBus>(
     usbdev: &mut UsbDevice<'static, B>,
     serial: &mut SerialPort<'static, B>,
-    buf: &mut Vec<u8, U64>,
+    _buf: &mut Vec<u8, U64>,
     blip: &mut blip::Blip,
 ) {
     if !usbdev.poll(&mut [serial]) {
@@ -225,36 +209,34 @@ fn usb_poll<B: bus::UsbBus>(
     match serial.read(&mut data) {
         Ok(count) if count > 0 => {
             rprintln!("count = {}", count);
-            buf.extend_from_slice(&data).unwrap();
+            //buf.extend_from_slice(&data).unwrap();
 
-            if let Some(cmd) = parse_command(&data) {
+            if let Some(cmd) = cmd_from_buf(&data) {
                 rprintln!("Cmd: {:?}", cmd);
                 let reply = blip.handle_command(cmd);
-                usb_send_reply(serial, &reply);
+                serial_reply(serial, &reply);
             }
-
         }
         Ok(_) => (),
-        Err(e) => rprintln!("serial err: {:?}", e),
+        Err(e) => (), //rprintln!("serial err: {:?}", e),
     }
 
-
-    buf.clear();
+    //buf.clear();
 }
 
-fn usb_write<B: bus::UsbBus>(serial: &mut SerialPort<'static, B>, towrite: &[u8]) {
-    let count = towrite.len();
-    let mut write_offset = 0;
+fn serial_send<B: bus::UsbBus>(serial: &mut SerialPort<'static, B>, data: &[u8]) {
+    let count = data.len();
+    let mut offset = 0;
 
-    while write_offset < count {
-        match serial.write(&towrite[write_offset..]) {
-            Ok(read) if read > 0 => write_offset += read,
+    while offset < count {
+        match serial.write(&data[offset..]) {
+            Ok(sent) if sent > 0 => offset += sent,
             _ => {}
         }
     }
 }
 
-fn usb_send_reply<B: bus::UsbBus>(serial: &mut SerialPort<'static, B>, reply: &Reply) {
-    let replybytes: heapless::Vec<u8, U1024> = to_vec(&reply).unwrap();
-    usb_write(serial, &replybytes);
+fn serial_reply<B: bus::UsbBus>(serial: &mut SerialPort<'static, B>, reply: &Reply) {
+    let d: heapless::Vec<u8, U1024> = to_vec(&reply).unwrap();
+    serial_send(serial, &d);
 }

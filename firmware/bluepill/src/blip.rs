@@ -59,10 +59,7 @@ impl BlipCapturer {
     pub fn sample(&mut self, edge: bool, ts: u32) -> Option<Reply> {
 
         if edge == self.edge {
-
-            if self.i != 0
-                && self.last_edge != 0 // TODO: Check if this can be removed
-                && ts.wrapping_sub(self.last_edge) > self.timeout {
+            if self.i != 0 && ts.wrapping_sub(self.last_edge) > self.timeout {
 
                 let reply = capture_reply(self.samplerate, &self.buf[0..self.i]);
                 self.reset();
@@ -178,7 +175,7 @@ impl Blip {
             Command::Info => {
                 Reply::Info {
                     info: Info {
-                        version: 1,
+                        version: VERSION,
                         transmitters: 0, //blip::ENABLED_TRANSMITTERS,
                     },
                 }
@@ -189,7 +186,6 @@ impl Blip {
                 Reply::Ok
             }
             Command::CaptureProtocol(_id) => {
-                rprintln!("CaptureProtocol not implemented");
                 Reply::Ok
             }
             Command::RemoteControlSend(cmd) => {
