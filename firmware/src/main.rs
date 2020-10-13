@@ -21,13 +21,16 @@ use stm32f1xx_hal::{
     timer::{self, CountDownTimer, Timer, Tim4NoRemap},
 };
 
-use blipper_protocol::{Command, Info, Reply};
+use blipper_protocol::{Command, Reply};
 use heapless::{consts::*, Vec};
 use postcard::{from_bytes, to_vec};
 
 mod blip;
 
 const SAMPLERATE: u32 = 40_000;
+
+type PwmPinType = PwmChannel<TIM4, C4>;
+type BlipType = blip::Blip<PwmPinType, u16>;
 
 #[app(device = stm32f1xx_hal::pac, peripherals = true)]
 const APP: () = {
@@ -37,8 +40,7 @@ const APP: () = {
         recvbuf: Vec<u8, U64>,
         timer2: CountDownTimer<pac::TIM2>,
         irpin: PB8<Input<Floating>>,
-        pwm: PwmChannel<TIM4, C4>,
-        blip: blip::Blip,
+        blip: BlipType,
     }
 
     #[init]
@@ -123,8 +125,7 @@ const APP: () = {
             recvbuf: Default::default(),
             timer2: timer,
             irpin,
-            pwm: pwmpin,
-            blip: blip::Blip::new(SAMPLERATE),
+            blip: blip::Blip::new(pwmpin, SAMPLERATE),
         }
     }
 
@@ -146,16 +147,16 @@ const APP: () = {
     #[task(
         binds = TIM2,
         spawn = [send_reply],
-        resources = [timer2, irpin, blip, pwm],
+        resources = [timer2, irpin, blip, ],
     )]
     fn t2_irq(ctx: t2_irq::Context) {
         static mut TS: u32 = 0;
-        let t2_irq::Resources {timer2, irpin, blip, pwm} = ctx.resources;
+        let t2_irq::Resources {timer2, irpin, blip, } = ctx.resources;
 
         let level = irpin.is_low().unwrap();
         timer2.clear_update_interrupt_flag();
 
-        if let Some(reply) = blip.tick(*TS, level, pwm) {
+        if let Some(reply) = blip.tick(*TS, level) {
             let _ = ctx.spawn.send_reply(reply);
         }
 
@@ -210,11 +211,11 @@ fn parse_command(buf: &[u8]) -> Option<Command> {
 }
 
 
-fn usb_poll<B: bus::UsbBus>(
+fn usb_poll<B: bus::UsbBus, >(
     usbdev: &mut UsbDevice<'static, B>,
     serial: &mut SerialPort<'static, B>,
     buf: &mut Vec<u8, U64>,
-    blip: &mut blip::Blip,
+    blip: &mut BlipType,
 ) {
     if !usbdev.poll(&mut [serial]) {
         return;
@@ -237,7 +238,6 @@ fn usb_poll<B: bus::UsbBus>(
         Ok(_) => (),
         Err(e) => rprintln!("serial err: {:?}", e),
     }
-
 
     buf.clear();
 }

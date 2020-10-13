@@ -2,7 +2,6 @@ use std::io;
 use std::path::Path;
 
 use heapless::consts::U64;
-use log::info;
 use postcard::{from_bytes, to_vec};
 use serialport::{SerialPort, SerialPortSettings};
 

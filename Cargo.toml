@@ -8,3 +8,6 @@ members = [
 exclude = [
     "firmware"
 ]
+
+[patch.crates-io]
+infrared = { path = "../infrared" }
