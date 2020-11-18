@@ -31,7 +31,9 @@ pub fn command_capture(
 
             println!(
                 "len: {}, samplerate: {}\ndata: {:?}",
-                data.len, data.samplerate, concated
+                data.len,
+                data.samplerate, 
+                concated
             );
 
             // Decode the data and print it

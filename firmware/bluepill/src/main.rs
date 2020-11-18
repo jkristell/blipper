@@ -219,7 +219,7 @@ fn usb_poll<B: bus::UsbBus, >(
             }
         }
         Ok(_) => (),
-        Err(e) => (), //rprintln!("serial err: {:?}", e),
+        Err(_e) => (), //rprintln!("serial err: {:?}", e),
     }
 
     buf.clear();
