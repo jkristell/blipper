@@ -25,7 +25,7 @@ use blipper_protocol::{Command, Reply};
 use heapless::{consts::*, Vec};
 use postcard::{from_bytes, to_vec};
 
-mod blip;
+use libblip as blip;
 
 const SAMPLERATE: u32 = 40_000;
 
