@@ -1,77 +1,65 @@
-use std::fmt::Debug;
-use std::io;
-use std::path::Path;
+use std::{io, path::Path};
 
 use log::warn;
 
 use infrared::{
-    Command,
-    recv::{
-        Receiver,
-        State,
-    },
     protocols::{
-        nec::Nec,
+        nec::{Nec, NecSamsung},
         rc5::Rc5,
         rc6::Rc6,
     },
+    Command, EventReceiver, ReceiverSM,
 };
 
 use crate::vcdutils::vcdfile_to_vec;
+use blipper_utils::decoder::DecodedCommand;
 
-pub fn command_playback(name: &str, path: &Path) -> io::Result<()> {
-    let (samplerate, v) = vcdfile_to_vec(path).unwrap();
-    let debug = false;
+pub fn command(name: &str, path: &Path) -> io::Result<Vec<DecodedCommand>> {
+    let (samplerate, v) = vcdfile_to_vec(path)?;
 
-    match name {
+    Ok(match name {
         "nes" => {
-            let mut nec = Nec::new(samplerate);
-            play_vcd(&v, &mut nec, debug)
+            let mut recv: EventReceiver<Nec<NecSamsung>> = EventReceiver::new(samplerate);
+            play_vcd(&v, &mut recv)
         }
         "rc5" => {
-            let mut recv = Rc5::new(samplerate);
-            play_vcd(&v, &mut recv, debug)
+            let mut recv: EventReceiver<Rc5> = EventReceiver::new(samplerate);
+            play_vcd(&v, &mut recv)
         }
         "rc6" => {
-            let mut recv = Rc6::new(samplerate);
-            play_vcd(&v, &mut recv, debug)
+            let mut recv: EventReceiver<Rc6> = EventReceiver::new(samplerate);
+            play_vcd(&v, &mut recv)
         }
         _ => {
             warn!("Unknown protocol: {}", name);
-            Ok(())
+            vec![]
         }
-    }
+    })
 }
 
-pub fn play_vcd<RECV, CMD>(
-    vcdvec: &[(u64, bool)],
-    recv: &mut RECV,
-    _debug: bool
-) -> io::Result<()>
-where
-    RECV: Receiver<Cmd = CMD>,
-    CMD: Debug + Command,
-{
+pub fn play_vcd<SM: ReceiverSM>(vcdvec: &[(u64, bool)], recv: &mut EventReceiver<SM>) -> Vec<DecodedCommand>{
     use std::convert::TryFrom;
+
+    let mut res = Vec::new();
 
     let iter = vcdvec
         .iter()
         .cloned()
         .map(|(t, v)| (u32::try_from(t).unwrap(), v));
 
+    let mut prev = 0;
     for (t, value) in iter {
-        let state = recv.event(value, t);
+        let dt = t - prev;
+        prev = t;
+        //println!("value: {}, t = {}, dt = {}", value, t, dt);
 
-        if let State::Done(ref cmd) = state {
-            println!("Cmd: {:?} ", cmd);
-            recv.reset();
-        }
-
-        if let State::Error(err) = state {
-            println!("Error: {:?}", err);
-            recv.reset();
+        if let Ok(Some(cmd)) = recv.edge_event(value, dt) {
+            res.push(DecodedCommand {
+                address: cmd.address(),
+                command: cmd.data(),
+                kind: cmd.protocol()
+            })
         }
     }
-
-    Ok(())
+    res
 }

@@ -1,19 +1,15 @@
-use std::fs::File;
-use std::io;
-use std::path::PathBuf;
-use structopt::{self, StructOpt};
+use std::{fs::File, io, path::PathBuf};
 
-use log::info;
+use env_logger::Env;
+use structopt::{self, StructOpt};
 
 mod capture;
 mod irsend;
-//mod playback;
+mod playback;
 mod vcdutils;
 
+use blipper_protocol::ProtocolId;
 use blipper_utils::SerialLink;
-use env_logger::Env;
-
-//use crate::playback::command_playback;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Blipper", about = "Blipper cli tool")]
@@ -30,12 +26,12 @@ struct Opt {
 #[derive(StructOpt, Debug)]
 enum CliCommand {
     /// Playback vcd file
-    PlaybackVcd {
+    Playback {
         /// nec nes rc5 rc5 sbp
-        protocol_string: String,
+        proto: String,
         path: PathBuf,
     },
-    /// Capture / Decode data from device. Optionaly write it to file
+    /// Capture / Decode data from device. Optionally write it to file
     Capture {
         path: Option<PathBuf>,
         #[structopt(short, long)]
@@ -44,7 +40,7 @@ enum CliCommand {
     /// Use Device as <protocol> receiver
     Protocol { id: u32 },
     /// Transmit
-    Transmit { protocol: u32, addr: u32, cmd: u32 },
+    Transmit { proto: u32, addr: u32, cmd: u32 },
 }
 
 fn main() -> io::Result<()> {
@@ -57,28 +53,29 @@ fn main() -> io::Result<()> {
 
     match opt.cmd {
         CliCommand::Capture { path, decode } => {
-            info!("Capture");
+            log::info!("Capture");
             link.connect(&path_serialport)?;
 
             let vcdout = path.and_then(|path| {
-                info!("Writing vcd to file: {:?}", path);
+                log::info!("Writing vcd to file: {:?}", path);
                 File::create(&path).ok()
             });
 
             capture::command_capture(&mut link, decode, vcdout)
         }
-        CliCommand::PlaybackVcd {
-            protocol_string,
-            path,
-        } => Ok(()), //command_playback(&protocol_string, &path),
+        CliCommand::Playback { proto, path } => {
+            let cmds = playback::command(&proto, &path)?;
+
+            for cmd in cmds {
+                println!("{:?}", cmd);
+            }
+
+            Ok(())
+        },
         CliCommand::Protocol { .. } => Ok(()),
-        CliCommand::Transmit {
-            protocol,
-            addr,
-            cmd,
-        } => {
+        CliCommand::Transmit { proto, addr, cmd} => {
             link.connect(&path_serialport)?;
-            irsend::transmit(&mut link, protocol, addr, cmd)
+            irsend::transmit(&mut link, ProtocolId::from(proto), addr, cmd)
         }
     }
 }

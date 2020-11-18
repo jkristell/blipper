@@ -1,4 +1,4 @@
-use infrared::{protocols::*, Command, ReceiverSM, Protocol, BufferedReceiver};
+use infrared::{protocols::*, Command, ReceiverSM, Protocol, BufferReceiver, protocols::nec::NecSamsung};
 
 #[derive(Debug)]
 pub struct DecodedCommand {
@@ -12,13 +12,12 @@ pub struct Decoders;
 impl Decoders {
 
     pub fn decode_data(&mut self, edges: &[u16], samplerate: u32) -> Vec<DecodedCommand> {
-        let edges = edges.iter().map(|v| u32::from(*v)).collect::<Vec<_>>();
 
-        let mut rc5: BufferedReceiver<Rc5> = BufferedReceiver::new(&edges, samplerate);
-        let mut rc6: BufferedReceiver<Rc6> = BufferedReceiver::new(&edges, samplerate);
-        let mut nec: BufferedReceiver<Nec> = BufferedReceiver::new(&edges, samplerate);
-        let mut nes: BufferedReceiver<NecSamsung> = BufferedReceiver::new(&edges, samplerate);
-        let mut sbp: BufferedReceiver<Sbp> = BufferedReceiver::new(&edges, samplerate);
+        let mut rc5: BufferReceiver<Rc5> = BufferReceiver::new(&edges, samplerate);
+        let mut rc6: BufferReceiver<Rc6> = BufferReceiver::new(&edges, samplerate);
+        let mut nec: BufferReceiver<Nec> = BufferReceiver::new(&edges, samplerate);
+        let mut nes: BufferReceiver<Nec<NecSamsung>> = BufferReceiver::new(&edges, samplerate);
+        let mut sbp: BufferReceiver<Sbp> = BufferReceiver::new(&edges, samplerate);
 
         to_cmd(&mut rc5)
             .chain(to_cmd(&mut rc6))
@@ -29,12 +28,13 @@ impl Decoders {
     }
 }
 
-fn to_cmd<'a, SM, CMD>(recv: &'a mut BufferedReceiver<'a, SM>) -> impl Iterator<Item=DecodedCommand> + 'a
+fn to_cmd<'a, SM, CMD>(recv: &'a mut BufferReceiver<SM>) -> impl Iterator<Item=DecodedCommand> + 'a
     where
         CMD: Command,
         SM: ReceiverSM<Cmd = CMD>,
 {
     recv
+        .iter()
         .map(|cmd|
             DecodedCommand {
                 address: cmd.address(),

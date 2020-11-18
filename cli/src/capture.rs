@@ -1,6 +1,6 @@
+use log::info;
 use std::fs::File;
 use std::io;
-use log::info;
 
 use crate::vcdutils::VcdWriter;
 use blipper_protocol::{Command, Reply};
@@ -13,11 +13,7 @@ pub fn command_capture(
 ) -> io::Result<()> {
     info!("Capturing");
 
-    let mut decoder = if do_decode {
-        Some(Decoders)
-    } else {
-        None
-    };
+    let mut decoder = if do_decode { Some(Decoders) } else { None };
 
     let mut vcd = capture_file.as_mut().map(|file| VcdWriter::new(file));
 
@@ -35,9 +31,7 @@ pub fn command_capture(
 
             println!(
                 "len: {}, samplerate: {}\ndata: {:?}",
-                data.len,
-                data.samplerate,
-                concated
+                data.len, data.samplerate, concated
             );
 
             // Decode the data and print it

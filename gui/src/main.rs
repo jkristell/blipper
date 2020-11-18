@@ -22,6 +22,7 @@ use blipper_utils::{
 };
 
 use blipper_protocol as common;
+use blipper_protocol::ProtocolId;
 
 struct TransmitPanel {
     rcselect: ComboBoxText,
@@ -120,9 +121,9 @@ impl BlipperGui {
         let remote = &self.remotes[self.selected];
 
         let cmd = common::RemoteControlCmd {
-            txid: 1, //remote.protocol as u8,
+            pid: ProtocolId::Rc5, //remote.protocol as u8,
             addr: remote.addr as u16,
-            cmd: cmd,
+            cmd,
         };
 
         println!("Sending command: {:?}", cmd);

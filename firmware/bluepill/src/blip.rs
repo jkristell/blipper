@@ -1,21 +1,15 @@
 use embedded_hal::PwmPin;
 
-use blipper_protocol::{Command, Info, CaptureData, Reply};
+use blipper_protocol::{Command, Info, CaptureData, Reply, ProtocolId};
+use rtt_target::{rprintln};
 
 use infrared::{
-    sender::{
-        {Sender, PwmPinSender},
-        State as SenderState
-    },
     protocols::{
-        rc5::{Rc5Command, Rc5Sender},
-        nec::{NecTransmitter, NecSamsungTransmitter, NecCommand}
-    }
+        rc5::{Rc5Command},
+        nec::{NecCommand, NecSamsung, NecStandard}
+    },
+    hal::HalSender,
 };
-
-const NEC_ID: u8 = 1;
-const NES_ID: u8 = 2;
-const RC5_ID: u8 = 3;
 
 const VERSION: u32 = 1;
 
@@ -85,83 +79,69 @@ impl BlipCapturer {
     }
 }
 
-pub struct Transmitters {
-    nec: NecTransmitter,
-    nes: NecSamsungTransmitter,
-    rc5: Rc5Sender,
-    active: u8,
+pub struct Transmitters<PWMPIN, DUTY>
+    where
+        PWMPIN: PwmPin<Duty = DUTY>,
+{
+    sender: HalSender<PWMPIN, DUTY>,
 }
 
-impl Transmitters {
-    fn new(samplerate: u32) -> Self {
+impl<PWMPIN, DUTY> Transmitters<PWMPIN, DUTY>
+where
+    PWMPIN: PwmPin<Duty = DUTY>,
+{
+    fn new(pin: PWMPIN, samplerate: u32) -> Self {
         Self {
-            nec: NecTransmitter::new(samplerate),
-            nes: NecSamsungTransmitter::new(samplerate),
-            rc5: Rc5Sender::new(samplerate),
-            active: 0,
+            sender: HalSender::new(samplerate, pin),
         }
     }
 
-    pub fn load(&mut self, tid: u8, addr: u16, cmd: u8) {
-        self.active = tid;
-
-        match tid {
-            NEC_ID => self.nec.load(NecCommand {
-                addr,
-                cmd,
-            }),
-            NES_ID => self.nes.load(NecCommand {
-                addr,
-                cmd,
-            }),
-            RC5_ID => self.rc5.load(Rc5Command::new(addr as u8, cmd, false)),
-            _ => (),
-        }
+    pub fn load(&mut self, pid: ProtocolId, addr: u16, cmd: u8) {
+        match pid {
+            ProtocolId::Nec => self.sender.load(&NecCommand::<NecStandard>::new(addr, cmd)),
+            ProtocolId::NecSamsung => self.sender.load(&NecCommand::<NecSamsung>::new(addr, cmd)),
+            ProtocolId::Rc5 => self.sender.load(&Rc5Command::new(addr as u8, cmd, false)),
+        };
     }
 
-    fn step<PWM: PwmPin<Duty = DUTY>, DUTY>(
+    fn step(
         &mut self,
-        sample: u32,
-        pwm: &mut PWM,
-    ) -> SenderState {
-        match self.active {
-            NEC_ID => self.nec.step_pwm(sample, pwm),
-            NES_ID => self.nes.step_pwm(sample, pwm),
-            RC5_ID => self.rc5.step_pwm(sample, pwm),
-            _ => SenderState::Idle,
-        }
+    ) {
+        self.sender.tick()
     }
 }
 
-pub struct Blip {
+pub struct Blip<PWMPIN, DUTY>
+    where
+        PWMPIN: PwmPin<Duty = DUTY>,
+{
     pub state: State,
     pub capturer: BlipCapturer,
-    pub txers: Transmitters,
+    pub txers: Transmitters<PWMPIN, DUTY>,
     pub samplerate: u32,
 }
 
-impl Blip {
-    pub fn new(samplerate: u32) -> Self {
+impl<PWMPIN, DUTY> Blip<PWMPIN, DUTY>
+    where
+        PWMPIN: PwmPin<Duty = DUTY>,
+{
+    pub fn new(pwmpin: PWMPIN, samplerate: u32) -> Self {
         Blip {
             state: State::Idle,
             capturer: BlipCapturer::new(samplerate),
-            txers: Transmitters::new(samplerate),
+            txers: Transmitters::new(pwmpin, samplerate),
             samplerate,
         }
     }
 
-    fn irsend<D, PWM: PwmPin<Duty = D>>(&mut self, samplenum: u32, pwm: &mut PWM) -> bool {
-        let state = self.txers.step(samplenum, pwm);
-        match state {
-            SenderState::Transmit(send) => send,
-            SenderState::Idle | SenderState::Error => false,
-        }
+    fn irsend(&mut self) {
+        self.txers.step();
     }
 
-    pub fn tick<D, PWM: PwmPin<Duty = D>>(&mut self, timestamp: u32, level: bool, pwm: &mut PWM) -> Option<Reply> {
+    pub fn tick(&mut self, timestamp: u32, level: bool) -> Option<Reply> {
         match self.state {
             State::Idle => None,
-            State::IrSend => { self.irsend(timestamp, pwm); None}
+            State::IrSend => { self.irsend(); None}
             State::CaptureRaw => self.capturer.sample(level, timestamp)
         }
     }
@@ -189,7 +169,7 @@ impl Blip {
                 Reply::Ok
             }
             Command::RemoteControlSend(cmd) => {
-                self.txers.load(cmd.txid, cmd.addr, cmd.cmd);
+                self.txers.load(cmd.pid, cmd.addr, cmd.cmd);
                 self.state = State::IrSend;
                 Reply::Ok
             }
