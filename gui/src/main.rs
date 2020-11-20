@@ -7,9 +7,9 @@ use std::{io, thread, time};
 use gdk_pixbuf::Pixbuf;
 use gio::prelude::*;
 use glib::{self, clone};
-use gtk::prelude::*;
+use gtk::{MessageType, prelude::*};
 use gtk::GridExt;
-use gtk::{ApplicationWindow, Builder, Button, ComboBoxText, Grid, Image, Label, ListStore};
+use gtk::{ApplicationWindow, Builder, Button, ComboBoxText, Grid, Image, Label, ListStore, InfoBar};
 
 use infrared::{
     Button as StandardButton,
@@ -22,7 +22,6 @@ use blipper_utils::{
 };
 
 use blipper_protocol as common;
-use blipper_protocol::ProtocolId;
 
 struct TransmitPanel {
     rcselect: ComboBoxText,
@@ -49,6 +48,7 @@ struct BlipperGui {
     transmit_panel: TransmitPanel,
     info_panel: InfoPanel,
     decoder_panel: DecoderPanel,
+    infobar: InfoBar,
 }
 
 impl BlipperGui {
@@ -58,6 +58,7 @@ impl BlipperGui {
         transmit_panel: TransmitPanel,
         info_panel: InfoPanel,
         decoder_panel: DecoderPanel,
+        infobar: InfoBar,
     ) -> Rc<RefCell<BlipperGui>> {
         let blippergui = BlipperGui {
             arclink: Arc::new(Mutex::new(SerialLink::new())),
@@ -67,6 +68,7 @@ impl BlipperGui {
             transmit_panel,
             info_panel,
             decoder_panel,
+            infobar,
         };
 
         let model = ListStore::new(&[String::static_type(), glib::Type::U32]);
@@ -121,7 +123,7 @@ impl BlipperGui {
         let remote = &self.remotes[self.selected];
 
         let cmd = common::RemoteControlCmd {
-            pid: ProtocolId::Rc5, //remote.protocol as u8,
+            pid: remote.protocol as u8,
             addr: remote.addr as u16,
             cmd,
         };
@@ -188,7 +190,11 @@ impl BlipperGui {
                     .map_err(|_err| gui.statusbar_label.set_markup("Error Sending"))
                     .ok();
             }
-            Err(err) => gui.statusbar_label.set_markup(&format!("<b>{}</b>", err)),
+            //Err(err) => gui.statusbar_label.set_markup(&format!("<b>{}</b>", err)),
+            Err(err) => {
+                gui.infobar.set_message_type(MessageType::Error);
+                gui.statusbar_label.set_markup(&format!("<b>{}</b>", err));
+            }
         }
     }
 }
@@ -201,6 +207,7 @@ fn build_ui(application: &gtk::Application) {
 
     let connect_button: Button = builder.get_object("connect_button").unwrap();
     let statusbar_label = builder.get_object("statusbar_label").unwrap();
+    let infobar = builder.get_object("infobar").unwrap();
 
     let transmit_panel = TransmitPanel {
         rcselect: builder.get_object("rc_combo").unwrap(),
@@ -228,6 +235,7 @@ fn build_ui(application: &gtk::Application) {
         transmit_panel,
         info_panel,
         decoder_panel,
+        infobar,
     );
 
     let link_clone = blippergui.borrow().arclink.clone();

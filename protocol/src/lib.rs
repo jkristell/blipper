@@ -34,7 +34,7 @@ pub struct GenericRemote {
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct RemoteControlCmd {
-    pub pid: ProtocolId,
+    pub pid: u8,
     pub addr: u16,
     pub cmd: u8,
 }
@@ -44,22 +44,4 @@ pub struct Info {
     pub version: u32,
     /// Bitfield of transmitters
     pub transmitters: u32,
-}
-
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub enum ProtocolId {
-    Nec = 1,
-    NecSamsung = 2,
-    Rc5 = 5,
-}
-
-impl From<u32> for ProtocolId {
-    fn from(v: u32) -> Self {
-        match v {
-            1 => ProtocolId::Nec,
-            2 => ProtocolId::NecSamsung,
-            5 => ProtocolId::Rc5,
-            _ => ProtocolId::Nec,
-        }
-    }
 }
