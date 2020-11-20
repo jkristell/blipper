@@ -1,7 +1,9 @@
+#![no_std]
+
 use embedded_hal::PwmPin;
 
 use blipper_protocol::{Command, Info, CaptureData, Reply, ProtocolId};
-use rtt_target::{rprintln};
+//use rtt_target::{rprintln};
 
 use infrared::{
     protocols::{
@@ -53,10 +55,7 @@ impl BlipCapturer {
     pub fn sample(&mut self, edge: bool, ts: u32) -> Option<Reply> {
 
         if edge == self.edge {
-
-            if self.i != 0
-                && self.last_edge != 0 // TODO: Check if this can be removed
-                && ts.wrapping_sub(self.last_edge) > self.timeout {
+            if self.i != 0 && ts.wrapping_sub(self.last_edge) > self.timeout {
 
                 let reply = capture_reply(self.samplerate, &self.buf[0..self.i]);
                 self.reset();
@@ -104,12 +103,10 @@ where
             ProtocolId::Nec => self.sender.load(&NecCommand::<NecStandard>::new(addr, cmd)),
             ProtocolId::NecSamsung => self.sender.load(&NecCommand::<NecSamsung>::new(addr, cmd)),
             ProtocolId::Rc5 => self.sender.load(&Rc5Command::new(addr as u8, cmd, false)),
-        };
+        }.ok();
     }
 
-    fn step(
-        &mut self,
-    ) {
+    fn step(&mut self) {
         self.sender.tick()
     }
 }
@@ -149,7 +146,7 @@ impl<PWMPIN, DUTY> Blip<PWMPIN, DUTY>
         }
     }
 
-    pub(crate) fn handle_command(&mut self, cmd: Command) -> Reply {
+    pub fn handle_command(&mut self, cmd: Command) -> Reply {
         match cmd {
             Command::Idle => {
                 self.state = State::Idle;
@@ -169,7 +166,6 @@ impl<PWMPIN, DUTY> Blip<PWMPIN, DUTY>
                 Reply::Ok
             }
             Command::CaptureProtocol(_id) => {
-                rprintln!("CaptureProtocol not implemented");
                 Reply::Ok
             }
             Command::RemoteControlSend(cmd) => {
