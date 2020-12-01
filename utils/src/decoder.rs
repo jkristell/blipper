@@ -1,4 +1,8 @@
-use infrared::{protocols::*, Command, ReceiverSM, Protocol, BufferReceiver, protocols::nec::NecSamsung};
+use infrared::{
+    protocols::*, 
+    Command, 
+    ReceiverSM, 
+    Protocol, bufrecv::BufferReceiver, protocols::nec::NecSamsung};
 
 #[derive(Debug)]
 pub struct DecodedCommand {

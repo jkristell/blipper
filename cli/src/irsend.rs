@@ -1,16 +1,16 @@
 use std::io;
 
-use blipper_protocol::{Command, ProtocolId, RemoteControlCmd};
+use blipper_protocol::{Command, RemoteControlCmd};
 use blipper_utils::SerialLink;
 
 pub fn transmit(
     link: &mut SerialLink,
-    protocol: ProtocolId,
+    protocol: infrared::Protocol,
     addr: u32,
     cmd: u32,
 ) -> io::Result<()> {
     let rc_cmd = RemoteControlCmd {
-        pid: protocol,
+        pid: protocol as u8,
         addr: addr as u16,
         cmd: cmd as u8,
     };

@@ -8,7 +8,6 @@ mod irsend;
 mod playback;
 mod vcdutils;
 
-use blipper_protocol::ProtocolId;
 use blipper_utils::SerialLink;
 
 #[derive(Debug, StructOpt)]
@@ -38,9 +37,9 @@ enum CliCommand {
         decode: bool,
     },
     /// Use Device as <protocol> receiver
-    Protocol { id: u32 },
+    Protocol { id: u8 },
     /// Transmit
-    Transmit { proto: u32, addr: u32, cmd: u32 },
+    Transmit { proto: u8, addr: u32, cmd: u32 },
 }
 
 fn main() -> io::Result<()> {
@@ -75,7 +74,7 @@ fn main() -> io::Result<()> {
         CliCommand::Protocol { .. } => Ok(()),
         CliCommand::Transmit { proto, addr, cmd} => {
             link.connect(&path_serialport)?;
-            irsend::transmit(&mut link, ProtocolId::from(proto), addr, cmd)
+            irsend::transmit(&mut link, infrared::Protocol::from(proto), addr, cmd)
         }
     }
 }

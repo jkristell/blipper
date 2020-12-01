@@ -7,7 +7,6 @@ members = [
 ]
 exclude = [
     "firmware",
-    "nucleo-f401re"
 ]
 
 [patch.crates-io]

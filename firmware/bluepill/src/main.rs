@@ -168,7 +168,10 @@ const APP: () = {
         blip
     ])]
     fn usb_rx(ctx: usb_rx::Context) {
-        let usb_rx::Resources { usbdev, serial, recvbuf, blip } = ctx.resources;
+        let usb_rx::Resources { usbdev, 
+            serial, 
+            recvbuf, 
+            blip } = ctx.resources;
 
         usb_poll(
             usbdev,
