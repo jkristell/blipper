@@ -3,8 +3,9 @@ use std::fs::File;
 use std::io;
 
 use crate::vcdutils::VcdWriter;
-use blipper_protocol::{Command, Reply};
-use blipper_utils::{Decoders, SerialLink};
+
+use blipper_support::protocol::{Command, Reply};
+use blipper_support::{SerialLink, Decoders};
 
 pub fn command_capture(
     link: &mut SerialLink,

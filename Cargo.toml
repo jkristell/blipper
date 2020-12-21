@@ -1,9 +1,7 @@
 [workspace]
 members = [
-    "protocol",
-    "utils",
-    "cli",
-    "gui",
+    "blipper-support",
+    "blipper",
 ]
 exclude = [
     "firmware",

@@ -8,7 +8,7 @@ mod irsend;
 mod playback;
 mod vcdutils;
 
-use blipper_utils::SerialLink;
+use blipper_support::SerialLink;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Blipper", about = "Blipper cli tool")]

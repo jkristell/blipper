@@ -5,7 +5,7 @@ use heapless::consts::U64;
 use postcard::{from_bytes, to_vec};
 use serialport::{SerialPort, SerialPortSettings};
 
-use blipper_protocol::{CaptureData, Command, Reply};
+use crate::protocol::{CaptureData, Command, Reply};
 
 pub struct SerialLink {
     port: Option<Box<dyn SerialPort>>,
@@ -42,7 +42,7 @@ impl SerialLink {
             .write_all(&req)
     }
 
-    pub fn read_reply(&mut self) -> io::Result<blipper_protocol::Reply> {
+    pub fn read_reply(&mut self) -> io::Result<crate::protocol::Reply> {
         let mut recvbuf = [0; 1024];
         let mut offset = 0;
 

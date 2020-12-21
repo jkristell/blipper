@@ -1,5 +1,5 @@
 [package]
-name = "blipper-cli"
+name = "blipper"
 version = "0.1.0"
 authors = ["Johan Kristell <johan@jott.se>"]
 edition = "2018"
@@ -13,5 +13,4 @@ structopt = "0.3"
 heapless = "0.5.1"
 postcard = "0.5.1"
 infrared = { version = "0.7" }
-blipper-protocol = { path = "../protocol" }
-blipper-utils = { path = "../utils" }
+blipper-support = { path = "../blipper-support", features = ["utils"] }
