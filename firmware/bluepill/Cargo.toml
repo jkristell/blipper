@@ -21,7 +21,7 @@ cortex-m-rtic = { version = "0.5" }
 embedded-hal = "0.2"
 heapless = "0.5.5"
 postcard = "0.5.1"
-blipper-protocol = { path = "../../protocol" }
+blipper-support = { path = "../../blipper-support" }
 libblip = { path = "../libblip" }
 
 [dependencies.stm32f1xx-hal]

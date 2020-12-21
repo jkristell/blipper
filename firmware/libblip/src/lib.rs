@@ -2,7 +2,7 @@
 
 use embedded_hal::PwmPin;
 
-pub use blipper_protocol::{Command, Info, CaptureData, Reply};
+//pub use blipper_protocol::{Command, Info, CaptureData, Reply};
 //use rtt_target::{rprintln};
 
 use infrared::{
@@ -16,6 +16,7 @@ use infrared::{
 
 pub mod capturer;
 use crate::capturer::Capturer;
+pub use blipper_support::protocol::{Command, Reply, Info, CaptureData};
 
 const VERSION: u32 = 1;
 

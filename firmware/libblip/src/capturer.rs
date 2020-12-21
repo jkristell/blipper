@@ -1,5 +1,5 @@
-use blipper_protocol::Reply;
 use crate::capture_reply;
+use blipper_support::protocol::Reply;
 
 pub struct Capturer {
     pub ts_last_cmd: u32,

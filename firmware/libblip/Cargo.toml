@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 embedded-hal = "0.2.4"
-blipper-protocol = { path = "../../protocol" }
+blipper-support = { path = "../../blipper-support" }
 infrared = "0.7.0"
 rtt-target = { version = "0.2.2", features = ["cortex-m"] }
 postcard = "0.5.1"

@@ -21,7 +21,6 @@ use stm32f1xx_hal::{
     timer::{self, CountDownTimer, Timer, Tim4NoRemap},
 };
 
-use blipper_protocol::{Command, Reply};
 use heapless::{consts::*, Vec};
 use postcard::{from_bytes, to_vec};
 
@@ -135,7 +134,7 @@ const APP: () = {
     }
 
     #[task(resources = [serial])]
-    fn send_reply(ctx: send_reply::Context, reply: Reply) {
+    fn send_reply(ctx: send_reply::Context, reply: blip::Reply) {
         let mut serial = ctx.resources.serial;
         let reply_vec: heapless::Vec<u8, U512> = to_vec(&reply).unwrap();
         serial_send(&mut serial, &reply_vec);
@@ -187,8 +186,8 @@ const APP: () = {
     }
 };
 
-fn cmd_from_buf(buf: &[u8]) -> Option<Command> {
-    match from_bytes::<Command>(buf) {
+fn cmd_from_buf(buf: &[u8]) -> Option<blip::Command> {
+    match from_bytes::<blip::Command>(buf) {
         Ok(cmd) => Some(cmd),
         Err(err) => {
             rprintln!("Cmd parse error: {}", err);
@@ -240,7 +239,7 @@ fn serial_send<B: bus::UsbBus>(serial: &mut SerialPort<'static, B>, data: &[u8])
     }
 }
 
-fn serial_reply<B: bus::UsbBus>(serial: &mut SerialPort<'static, B>, reply: &Reply) {
+fn serial_reply<B: bus::UsbBus>(serial: &mut SerialPort<'static, B>, reply: &blip::Reply) {
     let d: heapless::Vec<u8, U1024> = to_vec(&reply).unwrap();
     serial_send(serial, &d);
 }
