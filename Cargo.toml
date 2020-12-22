@@ -1,11 +1,22 @@
+[package]
+name = "blipper"
+version = "0.1.0"
+authors = ["Johan Kristell <johan@jott.se>"]
+edition = "2018"
+
+[dependencies]
+log = "0.4.8"
+env_logger = "0.7.0"
+serialport = "3.3.0"
+vcd = "0.6.1"
+structopt = "0.3"
+heapless = "0.5.1"
+postcard = "0.5.1"
+infrared = { version = "0.7" }
+blipper-support = { path = "blipper-support", features = ["utils"] }
+
 [workspace]
-members = [
-    "blipper-support",
-    "blipper",
-]
-exclude = [
-    "firmware",
-]
+members = [ "blipper-support", ]
 
 [patch.crates-io]
 infrared = { path = "../infrared" }
