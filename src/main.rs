@@ -60,7 +60,7 @@ fn main() -> io::Result<()> {
                 File::create(&path).ok()
             });
 
-            capture::command_capture(&mut link, decode, vcdout)
+            capture::command_capture(&mut link, opt.debug, decode, vcdout)
         }
         CliCommand::Playback { proto, path } => {
             let cmds = playback::command(&proto, &path)?;

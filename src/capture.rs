@@ -1,4 +1,3 @@
-use log::info;
 use std::fs::File;
 use std::io;
 
@@ -9,10 +8,11 @@ use blipper_support::{SerialLink, Decoders};
 
 pub fn command_capture(
     link: &mut SerialLink,
+    verbose: bool,
     do_decode: bool,
     mut capture_file: Option<File>,
 ) -> io::Result<()> {
-    info!("Capturing");
+    log::info!("Capturing");
 
     let mut decoder = if do_decode { Some(Decoders) } else { None };
 
@@ -30,25 +30,39 @@ pub fn command_capture(
         if let Ok(Reply::CaptureReply { data }) = link.read_reply() {
             let concated = &data.bufs.concat()[..data.len as usize];
 
-            println!(
-                "len: {}, samplerate: {}\ndata: {:?}",
-                data.len,
-                data.samplerate, 
-                concated
+            log::debug!(
+                "Got CaptureReply data: {:?}",
+                data,
             );
 
+            if verbose {
+                println!(
+                    "CaptyreReply len: {}, samplerate: {}\ndata: {:?}",
+                    data.len,
+                    data.samplerate,
+                    concated
+                );
+            }
+
             // Decode the data and print it
-            if let Some(decoder) = decoder.as_mut() {
-                let decoded = decoder.decode_data(concated, data.samplerate);
-                for cmd in decoded {
-                    println!("Decoded: {:?}", cmd);
+            if let Some(decoders) = decoder.as_mut() {
+
+                let cmds = decoders.decode_data(concated, data.samplerate);
+
+                if cmds.is_empty() {
+                    println!("No command decoded");
+                } else {
+                    for cmd in cmds {
+                        println!("Decoded: {:?}", cmd);
+                    }
                 }
             }
 
             // Write vcd data
             if let Some(vcd) = vcd.as_mut() {
-                vcd.write_vec(concated)?;
+                vcd.write_slice(concated)?;
             }
         }
     }
 }
+

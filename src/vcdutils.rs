@@ -46,7 +46,7 @@ impl<'a> VcdWriter<'a> {
         Ok(())
     }
 
-    pub fn write_vec<T: Copy + Into<u64>>(&mut self, v: &[T]) -> io::Result<()> {
+    pub fn write_slice<T: Copy + Into<u64>>(&mut self, v: &[T]) -> io::Result<()> {
         let v2: Vec<u64> = v
             .iter()
             .map(|v| (*v).into())
