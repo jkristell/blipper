@@ -1,64 +1,52 @@
-use std::io;
-
 use std::fs::File;
+use std::io;
 use std::io::ErrorKind::InvalidInput;
 use std::path::Path;
+
 use vcd::{self, SimulationCommand, TimescaleUnit, Value};
 
-use log::info;
-
-pub struct BlipperVcd<'a> {
-    wires: Vec<vcd::IdCode>,
-    writer: vcd::Writer<'a>,
+pub struct VcdWriter<'a> {
+    vcd: vcd::Writer<&'a mut File>,
     timestamp: u64,
+    wire_id: vcd::IdCode,
 }
 
-impl<'a> BlipperVcd<'a> {
-    pub fn from_writer(
-        w: &'a mut dyn io::Write,
-        timescale: u32,
-        wirenames: &[&str],
-    ) -> io::Result<BlipperVcd<'a>> {
-        let mut writer = vcd::Writer::new(w);
-        let mut wires = Vec::new();
+impl<'a> VcdWriter<'a> {
+    /// Create a new vcd writer
+    pub fn new(file: &'a mut File) -> Self {
+        let vcd = vcd::Writer::new(file);
+
+        Self {
+            vcd,
+            timestamp: 0,
+            wire_id: vcd::IdCode::FIRST,
+        }
+    }
+
+    pub fn init(&mut self) -> io::Result<()> {
+        let writer = &mut self.vcd;
 
         // Write the header
-        writer.timescale(timescale, TimescaleUnit::US)?;
+        //TODO: Timescale
+        writer.timescale(25, TimescaleUnit::US)?;
         writer.add_module("top")?;
 
-        for name in wirenames {
-            let id = writer.add_wire(1, name)?;
-            wires.push(id);
-        }
+        // Add the wire
+        let id = writer.add_wire(1, "data")?;
+        self.wire_id = id;
 
         writer.upscope()?;
         writer.enddefinitions()?;
 
         // Write the initial values
         writer.begin(SimulationCommand::Dumpvars)?;
-        for wire in &wires {
-            writer.change_scalar(*wire, Value::V0)?;
-        }
+        writer.change_scalar(id, Value::V0)?;
         writer.end()?;
-
-        Ok(BlipperVcd {
-            wires,
-            writer,
-            timestamp: 0,
-        })
-    }
-
-    pub fn write_value(&mut self, wire_id: usize, ts: u64, high: bool) -> io::Result<()> {
-        let offseted_ts = self.timestamp + ts;
-
-        self.writer.timestamp(offseted_ts)?;
-        let value = if high { Value::V1 } else { Value::V0 };
-        self.writer.change_scalar(self.wires[wire_id], value)?;
 
         Ok(())
     }
 
-    pub fn write_vec<T: Copy + Into<u64>>(&mut self, v: &[T]) -> io::Result<()> {
+    pub fn write_slice<T: Copy + Into<u64>>(&mut self, v: &[T]) -> io::Result<()> {
         let v2: Vec<u64> = v
             .iter()
             .map(|v| (*v).into())
@@ -70,11 +58,21 @@ impl<'a> BlipperVcd<'a> {
 
         let mut level = true;
         for ts in &v2 {
-            self.write_value(0, *ts, level)?;
+            self.write_value(*ts, level)?;
             level = !level;
         }
 
         self.add_offset(v2.last().unwrap_or(&0) + 2000);
+
+        Ok(())
+    }
+
+    pub fn write_value(&mut self, ts: u64, high: bool) -> io::Result<()> {
+        let offseted_ts = self.timestamp + ts;
+
+        self.vcd.timestamp(offseted_ts)?;
+        let value = if high { Value::V1 } else { Value::V0 };
+        self.vcd.change_scalar(self.wire_id, value)?;
 
         Ok(())
     }
@@ -129,40 +127,3 @@ pub fn vcdfile_to_vec(path: &Path) -> io::Result<(u32, Vec<(u64, bool)>)> {
 
     Ok((samplerate, res))
 }
-
-pub fn play_saved_vcd(path: &Path, debug: bool) -> io::Result<()> {
-    use infrared::{rc5::Rc5Receiver};
-    use infrared::prelude::*;
-    use std::convert::TryFrom;
-
-    let (samplerate, vcdvec) = vcdfile_to_vec(path)?;
-
-    info!("Replay of vcdfile, samplerate = {}", samplerate);
-
-    let vcditer = vcdvec
-        .into_iter()
-        .map(|(t, v)| (u32::try_from(t).unwrap(), v));
-
-    let sr = 40_000;
-    let mut recv = Rc5Receiver::new(sr);
-
-    if debug {
-        println!("T\tRc5\tRising\tDelta\t\tState");
-    }
-    for (t, value) in vcditer {
-        let state = recv.sample(value, t);
-
-        if let ReceiverState::Done(ref cmd) = state {
-            println!("Cmd: {:?}", cmd);
-            recv.reset();
-        }
-
-        if let ReceiverState::Error(err) = state {
-            println!("--Error: {:?}", err);
-            recv.reset();
-        }
-    }
-
-    Ok(())
-}
-
