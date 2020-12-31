@@ -3,6 +3,8 @@ name = "blipper"
 version = "0.4.0"
 authors = ["Johan Kristell <johan@jott.se>"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
+description = "Blipper infrared utility"
 
 [dependencies]
 log = "0.4.8"
