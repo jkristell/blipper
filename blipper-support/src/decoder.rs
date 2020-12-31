@@ -17,11 +17,11 @@ impl Decoders {
 
     pub fn decode_data(&mut self, edges: &[u16], samplerate: u32) -> Vec<DecodedCommand> {
 
-        let mut rc5: BufferReceiver<Rc5> = BufferReceiver::with_pulses(&edges, samplerate);
-        let mut rc6: BufferReceiver<Rc6> = BufferReceiver::with_pulses(&edges, samplerate);
-        let mut nec: BufferReceiver<Nec> = BufferReceiver::with_pulses(&edges, samplerate);
-        let mut nes: BufferReceiver<Nec<NecSamsung>> = BufferReceiver::with_pulses(&edges, samplerate);
-        let mut sbp: BufferReceiver<Sbp> = BufferReceiver::with_pulses(&edges, samplerate);
+        let mut rc5: BufferReceiver<Rc5> = BufferReceiver::with_values(&edges, samplerate);
+        let mut rc6: BufferReceiver<Rc6> = BufferReceiver::with_values(&edges, samplerate);
+        let mut nec: BufferReceiver<Nec> = BufferReceiver::with_values(&edges, samplerate);
+        let mut nes: BufferReceiver<Nec<NecSamsung>> = BufferReceiver::with_values(&edges, samplerate);
+        let mut sbp: BufferReceiver<Sbp> = BufferReceiver::with_values(&edges, samplerate);
 
         decmd_iter(&mut rc5)
             .chain(decmd_iter(&mut rc6))

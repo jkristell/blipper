@@ -1,40 +1,48 @@
 use std::{io, path::Path};
 
-use log::warn;
-
 use infrared::{
     protocols::{
-        nec::{Nec, NecSamsung},
+        nec::{Nec, NecSamsung, Nec16},
         rc5::Rc5,
         rc6::Rc6,
     },
     Command, EventReceiver, ReceiverSM,
+    Protocol,
 };
 
 use crate::vcdutils::vcdfile_to_vec;
 use blipper_support::decoder::DecodedCommand;
 
-pub fn command(name: &str, path: &Path) -> io::Result<Vec<DecodedCommand>> {
+pub fn command(protocol: Protocol, path: &Path) -> io::Result<Vec<DecodedCommand>> {
     let (samplerate, v) = vcdfile_to_vec(path)?;
 
-    Ok(match name {
-        "nes" => {
+    Ok(match protocol {
+        Protocol::Nec => {
+            let mut recv: EventReceiver<Nec> = EventReceiver::new(samplerate);
+            play_vcd(&v, &mut recv)
+        }
+        Protocol::Nec16 => {
+            let mut recv: EventReceiver<Nec<Nec16>> = EventReceiver::new(samplerate);
+            play_vcd(&v, &mut recv)
+        }
+        Protocol::NecSamsung => {
             let mut recv: EventReceiver<Nec<NecSamsung>> = EventReceiver::new(samplerate);
             play_vcd(&v, &mut recv)
         }
-        "rc5" => {
+        Protocol::Rc5 => {
             let mut recv: EventReceiver<Rc5> = EventReceiver::new(samplerate);
             play_vcd(&v, &mut recv)
         }
-        "rc6" => {
+        Protocol::Rc6 => {
             let mut recv: EventReceiver<Rc6> = EventReceiver::new(samplerate);
             play_vcd(&v, &mut recv)
         }
         _ => {
-            warn!("Unknown protocol: {}", name);
-            vec![]
+            log::warn!("Unhandled protocol: {:?}", protocol);
+            Vec::default()
         }
     })
+
 }
 
 pub fn play_vcd<SM: ReceiverSM>(vcdvec: &[(u64, bool)], recv: &mut EventReceiver<SM>) -> Vec<DecodedCommand>{

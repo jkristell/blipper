@@ -16,7 +16,9 @@ pub fn command_capture(
 
     let mut decoder = if do_decode { Some(Decoders) } else { None };
 
-    let mut vcd = capture_file.as_mut().map(|file| VcdWriter::new(file));
+    let mut vcd = capture_file
+        .as_mut()
+        .map(|file| VcdWriter::new(file));
 
     if let Some(vcd) = vcd.as_mut() {
         vcd.init()?;
@@ -53,7 +55,12 @@ pub fn command_capture(
                     println!("No command decoded");
                 } else {
                     for cmd in cmds {
-                        println!("Decoded: {:?}", cmd);
+                        println!(
+                            "{:?}\tAddr: {}\tCmd: {}",
+                            cmd.kind,
+                            cmd.address,
+                            cmd.command,
+                        );
                     }
                 }
             }
