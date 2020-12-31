@@ -8,7 +8,7 @@ mod irsend;
 mod playback;
 mod vcdutils;
 
-use blipper_support::SerialLink;
+use blipper_shared::SerialLink;
 use infrared::Protocol;
 
 #[derive(Debug, StructOpt)]

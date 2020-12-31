@@ -1,6 +1,6 @@
 [package]
-name = "blipper-support"
-version = "0.4.0"
+name = "blipper-shared"
+version = "0.1.0"
 authors = ["Johan Kristell <johan@jott.se>"]
 edition = "2018"
 

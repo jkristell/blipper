@@ -3,8 +3,8 @@ use std::io;
 
 use crate::vcdutils::VcdWriter;
 
-use blipper_support::protocol::{Command, Reply};
-use blipper_support::{SerialLink, Decoders};
+use blipper_shared::protocol::{Command, Reply};
+use blipper_shared::{SerialLink, Decoders};
 
 pub fn command_capture(
     link: &mut SerialLink,

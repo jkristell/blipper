@@ -11,7 +11,7 @@ use infrared::{
 };
 
 use crate::vcdutils::vcdfile_to_vec;
-use blipper_support::decoder::DecodedCommand;
+use blipper_shared::decoder::DecodedCommand;
 
 pub fn command(protocol: Protocol, path: &Path) -> io::Result<Vec<DecodedCommand>> {
     let (samplerate, v) = vcdfile_to_vec(path)?;

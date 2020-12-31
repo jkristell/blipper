@@ -1,7 +1,7 @@
 use std::io;
 
-use blipper_support::SerialLink;
-use blipper_support::protocol::{RemoteControlCmd, Command};
+use blipper_shared::SerialLink;
+use blipper_shared::protocol::{RemoteControlCmd, Command};
 
 pub fn transmit(
     link: &mut SerialLink,
