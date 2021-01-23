@@ -17,3 +17,6 @@ postcard = { version = "0.5.1", optional = true }
 infrared = { version = "0.8", features = ["remotes", "std"], optional = true }
 log = "0.4.11"
 serde = { version = "1", default-features = false, features = ["derive"] }
+
+[patch.crates-io]
+infrared = { git = "https://github.com/jkristell/infrared", branch="wip-r0.9" }
