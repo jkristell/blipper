@@ -1,50 +1,49 @@
 use infrared::{
-    protocols::*, 
-    ReceiverSM,
-    AsRemoteControlButton,
-    Protocol, bufrecv::BufferReceiver, protocols::nec::NecSamsung
+    protocols::{
+        {Nec, Nec16, NecApple, NecSamsung, Rc5, Rc6, Sbp},
+        nec::{Nec16Command, NecAppleCommand, NecCommand, NecRawCommand, NecSamsungCommand},
+        rc5::Rc5Command,
+        rc6::Rc6Command,
+        sbp::SbpCommand,
+    },
+    recv::BufferReceiver,
 };
 
 #[derive(Debug)]
-pub struct DecodedCommand {
-    pub address: u32,
-    pub command: u32,
-    pub kind: Protocol,
+pub enum BlipperCommand {
+    Nec(NecCommand),
+    Nec16(Nec16Command),
+    Nes(NecSamsungCommand),
+    NecApple(NecAppleCommand),
+    NecRaw(NecRawCommand),
+
+    Rc5(Rc5Command),
+    Rc6(Rc6Command),
+
+    Sbp(SbpCommand),
 }
 
 pub struct Decoders;
 
 impl Decoders {
+    pub fn run(&mut self, edges: &[u16], samplerate: u32) -> Vec<BlipperCommand> {
+        let nec: BufferReceiver<Nec> = BufferReceiver::with_values(&edges, samplerate);
+        let nes: BufferReceiver<NecSamsung> = BufferReceiver::with_values(&edges, samplerate);
+        let nec16: BufferReceiver<Nec16> = BufferReceiver::with_values(&edges, samplerate);
+        let nec_apple: BufferReceiver<NecApple> = BufferReceiver::with_values(&edges, samplerate);
 
-    pub fn decode_data(&mut self, edges: &[u16], samplerate: u32) -> Vec<DecodedCommand> {
+        let rc5: BufferReceiver<Rc5> = BufferReceiver::with_values(&edges, samplerate);
+        let rc6: BufferReceiver<Rc6> = BufferReceiver::with_values(&edges, samplerate);
+        let sbp: BufferReceiver<Sbp> = BufferReceiver::with_values(&edges, samplerate);
 
-        let mut rc5: BufferReceiver<Rc5> = BufferReceiver::with_values(&edges, samplerate);
-        let mut rc6: BufferReceiver<Rc6> = BufferReceiver::with_values(&edges, samplerate);
-        //let mut nec: BufferReceiver<Nec> = BufferReceiver::with_values(&edges, samplerate);
-        //let mut nes: BufferReceiver<Nec<NecSamsung>> = BufferReceiver::with_values(&edges, samplerate);
-        let mut sbp: BufferReceiver<Sbp> = BufferReceiver::with_values(&edges, samplerate);
+        nec.iter().map(BlipperCommand::Nec)
+            .chain(nes.iter().map(BlipperCommand::Nes))
+            .chain(nec16.iter().map(BlipperCommand::Nec16))
+            .chain(nec_apple.iter().map(BlipperCommand::NecApple))
 
-        decmd_iter(&mut rc5)
-            .chain(decmd_iter(&mut rc6))
-            //.chain(decmd_iter(&mut nec))
-            //.chain(decmd_iter(&mut nes))
-            .chain(decmd_iter(&mut sbp))
+            .chain(rc5.iter().map(BlipperCommand::Rc5))
+            .chain(rc6.iter().map(BlipperCommand::Rc6))
+            .chain(sbp.iter().map(BlipperCommand::Sbp))
             .collect()
     }
-}
-
-fn decmd_iter<'a, SM, CMD>(recv: &'a mut BufferReceiver<SM>) -> impl Iterator<Item=DecodedCommand> + 'a
-    where
-        SM: ReceiverSM<Cmd = CMD>,
-        CMD: AsRemoteControlButton,
-{
-    recv
-        .iter()
-        .map(|cmd|
-            DecodedCommand {
-                address: cmd.address(),
-                command: cmd.data(),
-                kind: cmd.protocol(),
-            }
-        )
 }

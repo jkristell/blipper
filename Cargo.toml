@@ -14,11 +14,11 @@ vcd = "0.6.1"
 structopt = "0.3"
 heapless = "0.5.1"
 postcard = "0.5.1"
-infrared = { version = "0.8" }
+infrared = { version = "0.9" }
 blipper-shared = { path = "blipper-shared", version = "0.1", features = ["utils"] }
 
 [workspace]
-members = [ "blipper-shared", ]
+members = ["blipper-shared"]
 
 [patch.crates-io]
 infrared = { git = "https://github.com/jkristell/infrared", branch="wip-r0.9" }
