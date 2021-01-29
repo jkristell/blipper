@@ -20,6 +20,3 @@ blipper-shared = { path = "blipper-shared", version = "0.1", features = ["utils"
 [workspace]
 members = ["blipper-shared"]
 
-[patch.crates-io]
-infrared = { git = "https://github.com/jkristell/infrared", branch="wip-r0.9" }
-
