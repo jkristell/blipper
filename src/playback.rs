@@ -1,41 +1,33 @@
 use std::{io, path::Path};
 
-use infrared::{
-    protocols::{
-        nec::{Nec, NecSamsung, Nec16},
-        rc5::Rc5,
-        rc6::Rc6,
-    },
-    Command, EventReceiver, ReceiverSM,
-    Protocol,
-};
+use infrared::{recv::EventReceiver, ProtocolId, recv::ReceiverSM, protocols::{nec::{Nec, Nec16, NecSamsung}, rc5::Rc5, rc6::Rc6}};
 
 use crate::vcdutils::vcdfile_to_vec;
-use blipper_shared::decoder::DecodedCommand;
+use blipper_shared::decoder::{BlipperCommand};
 
-pub fn command(protocol: Protocol, path: &Path) -> io::Result<Vec<DecodedCommand>> {
+pub fn command(protocol: ProtocolId, path: &Path) -> io::Result<Vec<BlipperCommand>> {
     let (samplerate, v) = vcdfile_to_vec(path)?;
 
     Ok(match protocol {
-        Protocol::Nec => {
+        ProtocolId::Nec => {
             let mut recv: EventReceiver<Nec> = EventReceiver::new(samplerate);
-            play_vcd(&v, &mut recv)
+            play_vcd(&v, &mut recv).into_iter().map(BlipperCommand::Nec).collect()
         }
-        Protocol::Nec16 => {
-            let mut recv: EventReceiver<Nec<Nec16>> = EventReceiver::new(samplerate);
-            play_vcd(&v, &mut recv)
+        ProtocolId::Nec16 => {
+            let mut recv: EventReceiver<Nec16> = EventReceiver::new(samplerate);
+            play_vcd(&v, &mut recv).into_iter().map(BlipperCommand::Nec16).collect()
         }
-        Protocol::NecSamsung => {
-            let mut recv: EventReceiver<Nec<NecSamsung>> = EventReceiver::new(samplerate);
-            play_vcd(&v, &mut recv)
+        ProtocolId::NecSamsung => {
+            let mut recv: EventReceiver<NecSamsung> = EventReceiver::new(samplerate);
+            play_vcd(&v, &mut recv).into_iter().map(BlipperCommand::Nes).collect()
         }
-        Protocol::Rc5 => {
+        ProtocolId::Rc5 => {
             let mut recv: EventReceiver<Rc5> = EventReceiver::new(samplerate);
-            play_vcd(&v, &mut recv)
+            play_vcd(&v, &mut recv).into_iter().map(BlipperCommand::Rc5).collect()
         }
-        Protocol::Rc6 => {
+        ProtocolId::Rc6 => {
             let mut recv: EventReceiver<Rc6> = EventReceiver::new(samplerate);
-            play_vcd(&v, &mut recv)
+            play_vcd(&v, &mut recv).into_iter().map(BlipperCommand::Rc6).collect()
         }
         _ => {
             log::warn!("Unhandled protocol: {:?}", protocol);
@@ -45,7 +37,7 @@ pub fn command(protocol: Protocol, path: &Path) -> io::Result<Vec<DecodedCommand
 
 }
 
-pub fn play_vcd<SM: ReceiverSM>(vcdvec: &[(u64, bool)], recv: &mut EventReceiver<SM>) -> Vec<DecodedCommand>{
+pub fn play_vcd<SM: ReceiverSM>(vcdvec: &[(u64, bool)], recv: &mut EventReceiver<SM>) -> Vec<SM::Cmd>{
     use std::convert::TryFrom;
 
     let mut res = Vec::new();
@@ -62,11 +54,7 @@ pub fn play_vcd<SM: ReceiverSM>(vcdvec: &[(u64, bool)], recv: &mut EventReceiver
         //println!("value: {}, t = {}, dt = {}", value, t, dt);
 
         if let Ok(Some(cmd)) = recv.edge_event(value, dt) {
-            res.push(DecodedCommand {
-                address: cmd.address(),
-                command: cmd.data(),
-                kind: cmd.protocol()
-            })
+            res.push(cmd);
         }
     }
     res

@@ -9,7 +9,7 @@ mod playback;
 mod vcdutils;
 
 use blipper_shared::SerialLink;
-use infrared::Protocol;
+use infrared::ProtocolId;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Blipper", about = "Blipper cli tool")]
@@ -51,9 +51,6 @@ fn main() -> io::Result<()> {
     let path_serialport = select_serialport(opt.serial, "/dev/ttyACM0");
     let mut link = SerialLink::new();
 
-
-
-
     match opt.cmd {
         CliCommand::Capture { path, nodecode } => {
             log::info!("Capture");
@@ -77,7 +74,10 @@ fn main() -> io::Result<()> {
 
             Ok(())
         },
-        CliCommand::Protocol { .. } => Ok(()),
+        CliCommand::Protocol { .. } => {
+            log::warn!("Protocol is not implemented");
+            Ok(())
+        },
         CliCommand::Transmit { proto, addr, cmd} => {
             link.connect(&path_serialport)?;
 
@@ -105,14 +105,15 @@ fn select_serialport(opt: Option<PathBuf>, def: &str) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(def))
 }
 
-fn parse_protocol(s: &str) -> Option<infrared::Protocol> {
+fn parse_protocol(s: &str) -> Option<ProtocolId> {
     match s {
-        "nec" => Some(Protocol::Nec),
-        "n16" => Some(Protocol::Nec16),
-        "sbp" => Some(Protocol::Sbp),
-        "nes" => Some(Protocol::NecSamsung),
-        "rc5" => Some(Protocol::Rc5),
-        "rc6" => Some(Protocol::Rc6),
+        "nec" => Some(ProtocolId::Nec),
+        "n16" => Some(ProtocolId::Nec16),
+        "nes" => Some(ProtocolId::NecSamsung),
+        "apple" => Some(ProtocolId::NecApple),
+        "rc5" => Some(ProtocolId::Rc5),
+        "rc6" => Some(ProtocolId::Rc6),
+        "sbp" => Some(ProtocolId::Sbp),
         _ => None,
     }
 }

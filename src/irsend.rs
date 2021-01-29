@@ -5,7 +5,7 @@ use blipper_shared::protocol::{RemoteControlCmd, Command};
 
 pub fn transmit(
     link: &mut SerialLink,
-    protocol: infrared::Protocol,
+    protocol: infrared::ProtocolId,
     addr: u32,
     cmd: u32,
 ) -> io::Result<()> {

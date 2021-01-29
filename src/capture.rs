@@ -49,18 +49,13 @@ pub fn command_capture(
             // Decode the data and print it
             if let Some(decoders) = decoder.as_mut() {
 
-                let cmds = decoders.decode_data(concated, data.samplerate);
+                let cmds = decoders.run(concated, data.samplerate);
 
                 if cmds.is_empty() {
                     println!("No command decoded");
                 } else {
                     for cmd in cmds {
-                        println!(
-                            "{:?}\tAddr: {}\tCmd: {}",
-                            cmd.kind,
-                            cmd.address,
-                            cmd.command,
-                        );
+                        println!("{:?}", cmd);
                     }
                 }
             }
