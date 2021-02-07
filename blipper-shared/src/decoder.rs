@@ -1,10 +1,10 @@
 use infrared::{
     protocols::{
-        {Nec, Nec16, NecApple, NecSamsung, Rc5, Rc6, Sbp},
         nec::{Nec16Command, NecAppleCommand, NecCommand, NecRawCommand, NecSamsungCommand},
         rc5::Rc5Command,
         rc6::Rc6Command,
         sbp::SbpCommand,
+        {Nec, Nec16, NecApple, NecSamsung, Rc5, Rc6, Sbp},
     },
     recv::BufferReceiver,
 };
@@ -27,23 +27,16 @@ pub struct Decoders;
 
 impl Decoders {
     pub fn run(&mut self, edges: &[u16], samplerate: u32) -> Vec<BlipperCommand> {
-        let nec: BufferReceiver<Nec> = BufferReceiver::with_values(&edges, samplerate);
-        let nes: BufferReceiver<NecSamsung> = BufferReceiver::with_values(&edges, samplerate);
-        let nec16: BufferReceiver<Nec16> = BufferReceiver::with_values(&edges, samplerate);
-        let nec_apple: BufferReceiver<NecApple> = BufferReceiver::with_values(&edges, samplerate);
+        let receiver = BufferReceiver::new(&edges, samplerate);
 
-        let rc5: BufferReceiver<Rc5> = BufferReceiver::with_values(&edges, samplerate);
-        let rc6: BufferReceiver<Rc6> = BufferReceiver::with_values(&edges, samplerate);
-        let sbp: BufferReceiver<Sbp> = BufferReceiver::with_values(&edges, samplerate);
-
-        nec.iter().map(BlipperCommand::Nec)
-            .chain(nes.iter().map(BlipperCommand::Nes))
-            .chain(nec16.iter().map(BlipperCommand::Nec16))
-            .chain(nec_apple.iter().map(BlipperCommand::NecApple))
-
-            .chain(rc5.iter().map(BlipperCommand::Rc5))
-            .chain(rc6.iter().map(BlipperCommand::Rc6))
-            .chain(sbp.iter().map(BlipperCommand::Sbp))
+        receiver
+            .iter::<Nec>().map(BlipperCommand::Nec)
+            .chain(receiver.iter::<NecSamsung>().map(BlipperCommand::Nes))
+            .chain(receiver.iter::<Nec16>().map(BlipperCommand::Nec16))
+            .chain(receiver.iter::<NecApple>().map(BlipperCommand::NecApple))
+            .chain(receiver.iter::<Rc5>().map(BlipperCommand::Rc5))
+            .chain(receiver.iter::<Rc6>().map(BlipperCommand::Rc6))
+            .chain(receiver.iter::<Sbp>().map(BlipperCommand::Sbp))
             .collect()
     }
 }

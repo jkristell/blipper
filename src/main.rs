@@ -64,7 +64,6 @@ fn main() -> io::Result<()> {
             capture::command_capture(&mut link, opt.debug, !nodecode, vcdout)
         }
         CliCommand::Playback { proto, path } => {
-
             let protocol = parse_protocol(&proto).expect("Failed to parse protocol");
             let cmds = playback::command(protocol, &path)?;
 
@@ -73,12 +72,12 @@ fn main() -> io::Result<()> {
             }
 
             Ok(())
-        },
+        }
         CliCommand::Protocol { .. } => {
             log::warn!("Protocol is not implemented");
             Ok(())
-        },
-        CliCommand::Transmit { proto, addr, cmd} => {
+        }
+        CliCommand::Transmit { proto, addr, cmd } => {
             link.connect(&path_serialport)?;
 
             let protocol = parse_protocol(&proto).expect("Failed to parse protocol");
