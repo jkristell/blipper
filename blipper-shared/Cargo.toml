@@ -14,7 +14,7 @@ utils = ["serialport", "heapless", "postcard", "infrared"]
 serialport = { version = "3.3.0", optional = true }
 heapless = { version = "0.5.5", optional = true }
 postcard = { version = "0.5.1", optional = true }
-infrared = { version = "0.11", features = ["remotes"], optional = true }
+infrared = { version = "0.12", features = ["remotes"], optional = true }
 log = "0.4.11"
 serde = { version = "1", default-features = false, features = ["derive"] }
 

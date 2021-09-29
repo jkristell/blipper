@@ -1,12 +1,12 @@
 use infrared::{
-    protocols::{
-        nec::{Nec16Command, NecAppleCommand, NecCommand, NecRawCommand, NecSamsungCommand},
-        rc5::Rc5Command,
-        rc6::Rc6Command,
-        sbp::SbpCommand,
+    Receiver,
+    protocol::{
+        Nec16Command, NecAppleCommand, NecCommand, NecSamsungCommand,
+        Rc5Command,
+        Rc6Command,
+        SbpCommand,
         {Nec, Nec16, NecApple, NecSamsung, Rc5, Rc6, Sbp},
     },
-    recv::BufferReceiver,
 };
 
 #[derive(Debug)]
@@ -15,7 +15,6 @@ pub enum BlipperCommand {
     Nec16(Nec16Command),
     Nes(NecSamsungCommand),
     NecApple(NecAppleCommand),
-    NecRaw(NecRawCommand),
 
     Rc5(Rc5Command),
     Rc6(Rc6Command),
@@ -27,7 +26,12 @@ pub struct Decoders;
 
 impl Decoders {
     pub fn run(&mut self, edges: &[u16], samplerate: u32) -> Vec<BlipperCommand> {
-        let receiver = BufferReceiver::new(&edges, samplerate);
+
+        let edges = edges.map(|v| v as usize).collect::<Vec<_>>();
+
+        let mut receiver = Receiver::builder().buffer(&edges).build();
+
+        new(&edges, samplerate);
 
         receiver
             .iter::<Nec>().map(BlipperCommand::Nec)

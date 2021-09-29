@@ -14,12 +14,12 @@ vcd = "0.6.1"
 structopt = "0.3"
 heapless = "0.5.1"
 postcard = "0.5.1"
-infrared = { version = "0.11" }
+infrared = { version = "0.12" }
 blipper-shared = { path = "blipper-shared", version = "0.1", features = ["utils"] }
 
 [workspace]
 members = ["blipper-shared"]
 
-# [patch.crates-io]
-# infrared = { path = "../infrared" }
+[patch.crates-io]
+infrared = { path = "../infrared" }
 
