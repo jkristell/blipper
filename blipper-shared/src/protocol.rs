@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+
 use infrared::ProtocolId;
 use serde::{Deserialize, Serialize};
 
@@ -51,7 +52,6 @@ pub struct Info {
 #[derive(Debug)]
 pub struct Pid(infrared::ProtocolId);
 
-
 impl Pid {
     pub fn as_u8(&self) -> u8 {
         self.0 as u8
@@ -82,8 +82,7 @@ impl TryFrom<&str> for Pid {
             "rc5" => Ok(ProtocolId::Rc5.into()),
             "rc6" => Ok(ProtocolId::Rc6.into()),
             "sbp" => Ok(ProtocolId::Sbp.into()),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
-

@@ -1,13 +1,9 @@
+use blipper_shared::{
+    protocol::{Command, Pid, RemoteControlCmd},
+    SerialLink,
+};
 
-use blipper_shared::protocol::{Command, Pid, RemoteControlCmd};
-use blipper_shared::SerialLink;
-
-pub fn transmit(
-    link: &mut SerialLink,
-    protocol: Pid,
-    addr: u32,
-    cmd: u32,
-) -> anyhow::Result<()> {
+pub fn transmit(link: &mut SerialLink, protocol: Pid, addr: u32, cmd: u32) -> anyhow::Result<()> {
     let rc_cmd = RemoteControlCmd {
         pid: protocol.as_u8(),
         addr: addr as u16,

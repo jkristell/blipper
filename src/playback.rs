@@ -1,18 +1,15 @@
 use std::{io, path::Path};
 
-use infrared::{protocol::{
-    {Nec, Nec16, SamsungNec},
-    Rc5,
-    Rc6,
-}, ProtocolId, Protocol};
-use infrared::protocol::AppleNec;
-use infrared::protocol::nec::decoder::NecDecoder;
-use infrared::protocol::nec::{AppleNecCommand, NecCommand};
-use infrared::receiver::{DecoderFactory, MultiReceiverCommand, ProtocolDecoder};
+use blipper_shared::protocol::Pid;
+use infrared::{
+    protocol::{nec::NecCommand, Nec, Nec16, Rc5, Rc6, SamsungNec},
+    receiver::{DecoderFactory, MultiReceiverCommand, ProtocolDecoder},
+    Protocol, ProtocolId,
+};
 
 use crate::vcdutils::vcdfile_to_vec;
-use blipper_shared::protocol::Pid;
 
+/*
 pub fn try_all(path: &Path) -> io::Result<Vec<MultiReceiverCommand>> {
     let (samplerate, v) = vcdfile_to_vec(path)?;
 
@@ -25,6 +22,8 @@ pub fn try_all(path: &Path) -> io::Result<Vec<MultiReceiverCommand>> {
 
     Ok(r)
 }
+
+ */
 
 pub fn command(protocol: Pid, path: &Path) -> io::Result<Vec<MultiReceiverCommand>> {
     let (samplerate, v) = vcdfile_to_vec(path)?;

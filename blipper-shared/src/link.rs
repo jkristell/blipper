@@ -1,5 +1,4 @@
-use std::io;
-use std::path::Path;
+use std::{io, path::Path};
 
 use postcard::{from_bytes, to_vec};
 use serialport::{SerialPort, SerialPortInfo};
@@ -17,11 +16,10 @@ impl SerialLink {
 
     pub fn list_ports() -> Result<Vec<SerialPortInfo>, serialport::Error> {
         serialport::available_ports()
-            //.map(|portvec| portvec.iter().map(|port| port.port_name.clone()).collect())
+        //.map(|portvec| portvec.iter().map(|port| port.port_name.clone()).collect())
     }
 
     pub fn connect<P: AsRef<Path>>(&mut self, path: P) -> Result<(), serialport::Error> {
-
         let path = path.as_ref().to_string_lossy();
         let port = serialport::new(path, 115_200).open()?;
 

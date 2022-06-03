@@ -1,9 +1,11 @@
 use std::fs::File;
 
-use crate::vcdutils::VcdWriter;
+use blipper_shared::{
+    protocol::{Command, Reply},
+    Decoders, SerialLink,
+};
 
-use blipper_shared::protocol::{Command, Reply};
-use blipper_shared::{Decoders, SerialLink};
+use crate::vcdutils::VcdWriter;
 
 pub fn setup(
     link: &mut SerialLink,
@@ -45,7 +47,7 @@ pub fn setup(
 
             // Decode the data and print it
             if let Some(decoders) = decoder.as_mut() {
-                let cmds = decoders.run(concated, data.samplerate);
+                let cmds = decoders.run(concated);
 
                 if cmds.is_empty() {
                     println!("No command decoded");

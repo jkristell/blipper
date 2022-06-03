@@ -1,7 +1,4 @@
-use std::fs::File;
-use std::io;
-use std::io::ErrorKind::InvalidInput;
-use std::path::Path;
+use std::{fs::File, io, io::ErrorKind::InvalidInput, path::Path};
 
 use vcd::{self, SimulationCommand, TimescaleUnit, Value};
 

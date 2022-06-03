@@ -1,9 +1,8 @@
-use std::{fs::File, path::PathBuf};
-use std::convert::TryInto;
+use std::{convert::TryInto, fs::File, path::PathBuf};
 
-use env_logger::Env;
-use clap::{Parser, Subcommand};
 use blipper_shared::SerialLink;
+use clap::{Parser, Subcommand};
+use env_logger::Env;
 
 mod capture;
 mod irsend;
@@ -58,7 +57,11 @@ fn main() -> anyhow::Result<()> {
     let mut link = SerialLink::new();
 
     match opt.cmd {
-        CliCommand::Capture { sample_rate, path, decode } => {
+        CliCommand::Capture {
+            sample_rate,
+            path,
+            decode,
+        } => {
             log::info!("Capture");
             link.connect(&path_serialport)?;
 
@@ -72,7 +75,10 @@ fn main() -> anyhow::Result<()> {
             capture::setup(&mut link, sample_rate, opt.debug, decode, vcdout)?;
         }
         CliCommand::Playback { proto, path } => {
-            let protocol = proto.as_str().try_into().map_err(|_| anyhow::Error::msg("Unknown protocol"))?;
+            let protocol = proto
+                .as_str()
+                .try_into()
+                .map_err(|_| anyhow::Error::msg("Unknown protocol"))?;
 
             let cmds = playback::command(protocol, &path)?;
 
@@ -86,7 +92,10 @@ fn main() -> anyhow::Result<()> {
         CliCommand::Transmit { proto, addr, cmd } => {
             link.connect(&path_serialport)?;
 
-            let protocol = proto.as_str().try_into().map_err(|_| anyhow::Error::msg("Unknown protocol"))?;
+            let protocol = proto
+                .as_str()
+                .try_into()
+                .map_err(|_| anyhow::Error::msg("Unknown protocol"))?;
 
             irsend::transmit(&mut link, protocol, addr, cmd)?;
         }
@@ -115,4 +124,3 @@ fn select_serialport(opt: Option<PathBuf>, def: &str) -> PathBuf {
         })
         .unwrap_or_else(|| PathBuf::from(def))
 }
-

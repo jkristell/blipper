@@ -17,6 +17,7 @@ anyhow = "1.0.57"
 
 [workspace]
 members = ["blipper-shared"]
+exclude = ["firmware"]
 
 [patch.crates-io]
 infrared = { path = "../infrared" }

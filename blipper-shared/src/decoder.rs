@@ -1,14 +1,12 @@
-use infrared::{Receiver, protocol::{
-    {Nec, Nec16, AppleNec, Rc5, Rc6, Sbp},
-}, Protocol};
-use infrared::protocol::nec::{AppleNecCommand, Nec16Command, NecCommand, SamsungNecCommand};
-use infrared::protocol::rc5::Command as Rc5Command;
-use infrared::protocol::rc6::Rc6Command;
-use infrared::protocol::{Capture, SamsungNec};
-use infrared::protocol::nec::decoder::NecDecoder;
-use infrared::protocol::rc5::decoder::Rc5Decoder;
-use infrared::protocol::sbp::SbpCommand;
-use infrared::receiver::{DecoderFactory, MultiReceiverCommand, ProtocolDecoder};
+use infrared::{
+    protocol::{
+        nec::{decoder::NecDecoder, AppleNecCommand, SamsungNecCommand},
+        rc5::decoder::Rc5Decoder,
+        AppleNec, Nec, Rc5, SamsungNec,
+    },
+    receiver::{DecoderFactory, MultiReceiverCommand, ProtocolDecoder},
+    Protocol,
+};
 
 pub struct Decoders {
     nec: NecDecoder<u32>,
@@ -18,7 +16,6 @@ pub struct Decoders {
 }
 
 impl Decoders {
-
     pub fn new(samplerate: u32) -> Self {
         Decoders {
             nec: Nec::decoder(samplerate),
@@ -28,13 +25,14 @@ impl Decoders {
         }
     }
 
-    pub fn run(&mut self, edges: &[u16], samplerate: u32) -> Vec<MultiReceiverCommand> {
-
+    pub fn run(&mut self, edges: &[u16]) -> Vec<MultiReceiverCommand> {
         let v = edges.iter().map(|v| *v as u32).collect::<Vec<_>>();
 
-        let r = run_decoder(&v, &mut self.nec).into_iter()
-            .chain( run_decoder(&v, &mut self.apple).into_iter())
-            .chain( run_decoder(&v, &mut self.samsung).into_iter())
+        let r = run_decoder(&v, &mut self.nec)
+            .into_iter()
+            .chain(run_decoder(&v, &mut self.apple).into_iter())
+            .chain(run_decoder(&v, &mut self.samsung).into_iter())
+            .chain(run_decoder(&v, &mut self.rc5).into_iter())
             .collect();
 
         return r;
@@ -45,10 +43,10 @@ pub fn run_decoder<Decoder, Proto>(
     vcdvec: &[u32],
     decoder: &mut Decoder,
 ) -> Vec<MultiReceiverCommand>
-    where
-        Decoder: ProtocolDecoder<u32, Proto>,
-        Proto: Protocol,
-        Proto::Cmd: Into<MultiReceiverCommand>,
+where
+    Decoder: ProtocolDecoder<u32, Proto>,
+    Proto: Protocol,
+    Proto::Cmd: Into<MultiReceiverCommand>,
 {
     let mut res = Vec::new();
 
