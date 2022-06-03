@@ -1,58 +1,55 @@
 use std::{io, path::Path};
 
-use infrared::{
-    protocol::{
-        {Nec, Nec16, NecSamsung},
-        Rc5,
-        Rc6,
-    },
-    Receiver,
-    ProtocolId,
-};
+use infrared::{protocol::{
+    {Nec, Nec16, SamsungNec},
+    Rc5,
+    Rc6,
+}, ProtocolId, Protocol};
+use infrared::protocol::AppleNec;
+use infrared::protocol::nec::decoder::NecDecoder;
+use infrared::protocol::nec::{AppleNecCommand, NecCommand};
+use infrared::receiver::{DecoderFactory, MultiReceiverCommand, ProtocolDecoder};
 
 use crate::vcdutils::vcdfile_to_vec;
-use blipper_shared::decoder::BlipperCommand;
-use infrared::receiver::{Event, DefaultInput, DecoderStateMachine};
+use blipper_shared::protocol::Pid;
 
-pub fn command(protocol: ProtocolId, path: &Path) -> io::Result<Vec<BlipperCommand>> {
+pub fn try_all(path: &Path) -> io::Result<Vec<MultiReceiverCommand>> {
     let (samplerate, v) = vcdfile_to_vec(path)?;
-    let samplerate = samplerate as usize;
 
-    Ok(match protocol {
+    let mut nec: NecDecoder<u32> = Nec::decoder(samplerate);
+    let mut apple: NecDecoder<u32, AppleNecCommand> = AppleNec::decoder(samplerate);
+
+    let r = play_vcd(&v, &mut nec).into_iter()
+        .chain( play_vcd(&v, &mut apple).into_iter())
+        .collect();
+
+    Ok(r)
+}
+
+pub fn command(protocol: Pid, path: &Path) -> io::Result<Vec<MultiReceiverCommand>> {
+    let (samplerate, v) = vcdfile_to_vec(path)?;
+
+    Ok(match protocol.as_ref() {
         ProtocolId::Nec => {
-            let mut recv: Receiver<Nec, Event, DefaultInput> = Receiver::new(samplerate, DefaultInput);
-            play_vcd(&v, &mut recv)
-                .into_iter()
-                .map(BlipperCommand::Nec)
-                .collect()
+            // NOTE: The default doesn't seem to resolve here
+            let mut decoder = Nec::<NecCommand>::decoder(samplerate);
+            play_vcd(&v, &mut decoder)
         }
         ProtocolId::Nec16 => {
-            let mut recv: Receiver<Nec16, Event, DefaultInput> = Receiver::new(samplerate, DefaultInput);
-            play_vcd(&v, &mut recv)
-                .into_iter()
-                .map(BlipperCommand::Nec16)
-                .collect()
+            let mut decoder = Nec16::decoder(samplerate);
+            play_vcd(&v, &mut decoder)
         }
         ProtocolId::NecSamsung => {
-            let mut recv: Receiver<NecSamsung, Event, DefaultInput> = Receiver::new(samplerate, DefaultInput);
-            play_vcd(&v, &mut recv)
-                .into_iter()
-                .map(BlipperCommand::Nes)
-                .collect()
+            let mut decoder = SamsungNec::decoder(samplerate);
+            play_vcd(&v, &mut decoder)
         }
         ProtocolId::Rc5 => {
-            let mut recv: Receiver<Rc5, Event, DefaultInput> = Receiver::new(samplerate, DefaultInput);
-            play_vcd(&v, &mut recv)
-                .into_iter()
-                .map(BlipperCommand::Rc5)
-                .collect()
+            let mut decoder = Rc5::decoder(samplerate);
+            play_vcd(&v, &mut decoder)
         }
         ProtocolId::Rc6 => {
-            let mut recv: Receiver<Rc6, Event, DefaultInput> = Receiver::new(samplerate, DefaultInput);
-            play_vcd(&v, &mut recv)
-                .into_iter()
-                .map(BlipperCommand::Rc6)
-                .collect()
+            let mut decoder = Rc6::decoder(samplerate);
+            play_vcd(&v, &mut decoder)
         }
         _ => {
             log::warn!("Unhandled protocol: {:?}", protocol);
@@ -61,12 +58,15 @@ pub fn command(protocol: ProtocolId, path: &Path) -> io::Result<Vec<BlipperComma
     })
 }
 
-pub fn play_vcd<SM: DecoderStateMachine>(
+pub fn play_vcd<Decoder, Proto>(
     vcdvec: &[(u64, bool)],
-    recv: &mut Receiver<SM, Event, DefaultInput>,
-) -> Vec<SM::Cmd> {
-    use std::convert::TryFrom;
-
+    decoder: &mut Decoder,
+) -> Vec<MultiReceiverCommand>
+where
+    Decoder: ProtocolDecoder<u32, Proto>,
+    Proto: Protocol,
+    Proto::Cmd: Into<MultiReceiverCommand>,
+{
     let mut res = Vec::new();
 
     let iter = vcdvec
@@ -80,8 +80,8 @@ pub fn play_vcd<SM: DecoderStateMachine>(
         prev = t;
         //println!("value: {}, t = {}, dt = {}", value, t, dt);
 
-        if let Ok(Some(cmd)) = recv.event(dt as usize, value) {
-            res.push(cmd);
+        if let Ok(Some(cmd)) = decoder.event_total(value, dt) {
+            res.push(cmd.into());
         }
     }
     res

@@ -1,20 +1,24 @@
 use std::fs::File;
-use std::io;
 
 use crate::vcdutils::VcdWriter;
 
 use blipper_shared::protocol::{Command, Reply};
 use blipper_shared::{Decoders, SerialLink};
 
-pub fn command_capture(
+pub fn setup(
     link: &mut SerialLink,
+    samplerate: u32,
     verbose: bool,
     do_decode: bool,
     mut capture_file: Option<File>,
-) -> io::Result<()> {
+) -> anyhow::Result<()> {
     log::info!("Capturing");
 
-    let mut decoder = if do_decode { Some(Decoders) } else { None };
+    let mut decoder = None;
+
+    if do_decode {
+        decoder.replace(Decoders::new(samplerate));
+    }
 
     let mut vcd = capture_file.as_mut().map(|file| VcdWriter::new(file));
 
@@ -23,7 +27,7 @@ pub fn command_capture(
     }
 
     // Set device in capture mode
-    link.send_command(Command::Capture)?;
+    link.send_command(Command::Capture(samplerate))?;
     link.reply_ok()?;
 
     loop {

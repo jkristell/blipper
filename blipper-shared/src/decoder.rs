@@ -1,46 +1,68 @@
-use infrared::{
-    Receiver,
-    protocol::{
-        Nec16Command, NecAppleCommand, NecCommand, NecSamsungCommand,
-        Rc5Command,
-        Rc6Command,
-        SbpCommand,
-        {Nec, Nec16, NecApple, NecSamsung, Rc5, Rc6, Sbp},
-    },
-};
+use infrared::{Receiver, protocol::{
+    {Nec, Nec16, AppleNec, Rc5, Rc6, Sbp},
+}, Protocol};
+use infrared::protocol::nec::{AppleNecCommand, Nec16Command, NecCommand, SamsungNecCommand};
+use infrared::protocol::rc5::Command as Rc5Command;
+use infrared::protocol::rc6::Rc6Command;
+use infrared::protocol::{Capture, SamsungNec};
+use infrared::protocol::nec::decoder::NecDecoder;
+use infrared::protocol::rc5::decoder::Rc5Decoder;
+use infrared::protocol::sbp::SbpCommand;
+use infrared::receiver::{DecoderFactory, MultiReceiverCommand, ProtocolDecoder};
 
-#[derive(Debug)]
-pub enum BlipperCommand {
-    Nec(NecCommand),
-    Nec16(Nec16Command),
-    Nes(NecSamsungCommand),
-    NecApple(NecAppleCommand),
-
-    Rc5(Rc5Command),
-    Rc6(Rc6Command),
-
-    Sbp(SbpCommand),
+pub struct Decoders {
+    nec: NecDecoder<u32>,
+    apple: NecDecoder<u32, AppleNecCommand>,
+    samsung: NecDecoder<u32, SamsungNecCommand>,
+    rc5: Rc5Decoder<u32>,
 }
 
-pub struct Decoders;
-
 impl Decoders {
-    pub fn run(&mut self, edges: &[u16], samplerate: u32) -> Vec<BlipperCommand> {
 
-        let edges = edges.map(|v| v as usize).collect::<Vec<_>>();
-
-        let mut receiver = Receiver::builder().buffer(&edges).build();
-
-        new(&edges, samplerate);
-
-        receiver
-            .iter::<Nec>().map(BlipperCommand::Nec)
-            .chain(receiver.iter::<NecSamsung>().map(BlipperCommand::Nes))
-            .chain(receiver.iter::<Nec16>().map(BlipperCommand::Nec16))
-            .chain(receiver.iter::<NecApple>().map(BlipperCommand::NecApple))
-            .chain(receiver.iter::<Rc5>().map(BlipperCommand::Rc5))
-            .chain(receiver.iter::<Rc6>().map(BlipperCommand::Rc6))
-            .chain(receiver.iter::<Sbp>().map(BlipperCommand::Sbp))
-            .collect()
+    pub fn new(samplerate: u32) -> Self {
+        Decoders {
+            nec: Nec::decoder(samplerate),
+            apple: AppleNec::decoder(samplerate),
+            samsung: SamsungNec::decoder(samplerate),
+            rc5: Rc5::decoder(samplerate),
+        }
     }
+
+    pub fn run(&mut self, edges: &[u16], samplerate: u32) -> Vec<MultiReceiverCommand> {
+
+        let v = edges.iter().map(|v| *v as u32).collect::<Vec<_>>();
+
+        let r = run_decoder(&v, &mut self.nec).into_iter()
+            .chain( run_decoder(&v, &mut self.apple).into_iter())
+            .chain( run_decoder(&v, &mut self.samsung).into_iter())
+            .collect();
+
+        return r;
+    }
+}
+
+pub fn run_decoder<Decoder, Proto>(
+    vcdvec: &[u32],
+    decoder: &mut Decoder,
+) -> Vec<MultiReceiverCommand>
+    where
+        Decoder: ProtocolDecoder<u32, Proto>,
+        Proto: Protocol,
+        Proto::Cmd: Into<MultiReceiverCommand>,
+{
+    let mut res = Vec::new();
+
+    let mut prev = 0;
+    let mut edge = false;
+    for t in vcdvec {
+        let dt = t - prev;
+        prev = *t;
+        edge = !edge;
+        //println!("value: {}, t = {}, dt = {}", value, t, dt);
+
+        if let Ok(Some(cmd)) = decoder.event_total(edge, dt) {
+            res.push(cmd.into());
+        }
+    }
+    res
 }

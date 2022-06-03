@@ -1,9 +1,8 @@
 use std::io;
 use std::path::Path;
 
-use heapless::consts::U64;
 use postcard::{from_bytes, to_vec};
-use serialport::{SerialPort, SerialPortSettings};
+use serialport::{SerialPort, SerialPortInfo};
 
 use crate::protocol::{CaptureData, Command, Reply};
 
@@ -16,26 +15,23 @@ impl SerialLink {
         SerialLink { port: None }
     }
 
-    pub fn list_ports() -> Result<Vec<String>, serialport::Error> {
+    pub fn list_ports() -> Result<Vec<SerialPortInfo>, serialport::Error> {
         serialport::available_ports()
-            .map(|portvec| portvec.iter().map(|port| port.port_name.clone()).collect())
+            //.map(|portvec| portvec.iter().map(|port| port.port_name.clone()).collect())
     }
 
     pub fn connect<P: AsRef<Path>>(&mut self, path: P) -> Result<(), serialport::Error> {
-        let settings = SerialPortSettings {
-            baud_rate: 115_200,
-            ..Default::default()
-        };
 
-        let path = path.as_ref();
-        let port = serialport::open_with_settings(path, &settings)?;
+        let path = path.as_ref().to_string_lossy();
+        let port = serialport::new(path, 115_200).open()?;
+
         self.port.replace(port);
 
         Ok(())
     }
 
     pub fn send_command(&mut self, cmd: Command) -> io::Result<()> {
-        let req: heapless::Vec<u8, U64> = to_vec(&cmd).unwrap();
+        let req: heapless::Vec<u8, 64> = to_vec(&cmd).unwrap();
         self.port
             .as_mut()
             .ok_or(io::ErrorKind::NotConnected)?

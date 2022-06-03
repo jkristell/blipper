@@ -2,7 +2,7 @@
 name = "blipper-shared"
 version = "0.1.0"
 authors = ["Johan Kristell <johan@jott.se>"]
-edition = "2018"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Blipper shared"
 
@@ -11,10 +11,10 @@ default = []
 utils = ["serialport", "heapless", "postcard", "infrared"]
 
 [dependencies]
-serialport = { version = "3.3.0", optional = true }
-heapless = { version = "0.5.5", optional = true }
-postcard = { version = "0.5.1", optional = true }
-infrared = { version = "0.12", features = ["remotes"], optional = true }
+serialport = { version = "4.2.0", optional = true }
+heapless = { version = "0.7.3", optional = true }
+postcard = { version = "0.7.3", optional = true }
+infrared = { version = "0.14.1", features = ["remotes"], optional = true }
 log = "0.4.11"
 serde = { version = "1", default-features = false, features = ["derive"] }
 

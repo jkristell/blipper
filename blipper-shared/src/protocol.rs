@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+use infrared::ProtocolId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -5,7 +7,8 @@ pub enum Command {
     Idle,
     Info,
     CaptureProtocol(u32),
-    Capture,
+    /// Start a capture at samplerate
+    Capture(u32),
     RemoteControlSend(RemoteControlCmd),
 }
 
@@ -43,3 +46,44 @@ pub struct Info {
     /// Bitfield of transmitters
     pub transmitters: u32,
 }
+
+/// Protocol Id
+#[derive(Debug)]
+pub struct Pid(infrared::ProtocolId);
+
+
+impl Pid {
+    pub fn as_u8(&self) -> u8 {
+        self.0 as u8
+    }
+}
+
+impl From<infrared::ProtocolId> for Pid {
+    fn from(protocol_id: ProtocolId) -> Self {
+        Pid(protocol_id)
+    }
+}
+
+impl AsRef<infrared::ProtocolId> for Pid {
+    fn as_ref(&self) -> &infrared::ProtocolId {
+        &self.0
+    }
+}
+
+impl TryFrom<&str> for Pid {
+    type Error = ();
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        match s.as_ref() {
+            "nec" => Ok(ProtocolId::Nec.into()),
+            "n16" => Ok(ProtocolId::Nec16.into()),
+            "nes" => Ok(ProtocolId::NecSamsung.into()),
+            "apple" => Ok(ProtocolId::NecApple.into()),
+            "rc5" => Ok(ProtocolId::Rc5.into()),
+            "rc6" => Ok(ProtocolId::Rc6.into()),
+            "sbp" => Ok(ProtocolId::Sbp.into()),
+            _ => Err(())
+        }
+    }
+}
+

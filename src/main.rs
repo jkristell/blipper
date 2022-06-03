@@ -1,18 +1,17 @@
-use std::{fs::File, io, path::PathBuf};
+use std::{fs::File, path::PathBuf};
+use std::convert::TryInto;
 
 use env_logger::Env;
-use structopt::{self, StructOpt};
+use clap::{Parser, Subcommand};
+use blipper_shared::SerialLink;
 
 mod capture;
 mod irsend;
 mod playback;
 mod vcdutils;
 
-use blipper_shared::SerialLink;
-use infrared::ProtocolId;
-
-#[derive(Debug, StructOpt)]
-#[structopt(name = "Blipper", about = "Blipper cli tool")]
+#[derive(Debug, Parser)]
+#[clap(name = "Blipper", about = "Blipper cli tool")]
 struct Opt {
     /// Serial Device. Defaults to /dev/ttyACM0
     #[structopt(long = "device", parse(from_os_str))]
@@ -23,7 +22,7 @@ struct Opt {
     cmd: CliCommand,
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(Subcommand, Debug)]
 enum CliCommand {
     /// Playback vcd file
     Playback {
@@ -33,58 +32,72 @@ enum CliCommand {
     },
     /// Capture / Decode data from device. Optionally write it to file
     Capture {
+        /// Samplerate
+        #[clap(default_value = "40000")]
+        sample_rate: u32,
+        /// Decode the data live
+        #[clap(short, long)]
+        decode: bool,
+        /// Vcd output
         path: Option<PathBuf>,
-        #[structopt(short, long)]
-        nodecode: bool,
     },
     /// Use Device as <protocol> receiver
     Protocol { id: u8 },
     /// Transmit
     Transmit { proto: String, addr: u32, cmd: u32 },
+    /// List serial ports
+    Listserialports,
 }
 
-fn main() -> io::Result<()> {
-    let opt = Opt::from_args();
+fn main() -> anyhow::Result<()> {
+    let opt = Opt::parse();
 
-    env_logger::from_env(Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let path_serialport = select_serialport(opt.serial, "/dev/ttyACM0");
     let mut link = SerialLink::new();
 
     match opt.cmd {
-        CliCommand::Capture { path, nodecode } => {
+        CliCommand::Capture { sample_rate, path, decode } => {
             log::info!("Capture");
             link.connect(&path_serialport)?;
 
-            let vcdout = path.and_then(|path| {
-                log::info!("Writing vcd to file: {:?}", path);
-                File::create(&path).ok()
-            });
+            let mut vcdout = None;
 
-            capture::command_capture(&mut link, opt.debug, !nodecode, vcdout)
+            if let Some(path) = path {
+                log::info!("Writing vcd to file: {:?}", path);
+                vcdout.replace(File::create(&path)?);
+            };
+
+            capture::setup(&mut link, sample_rate, opt.debug, decode, vcdout)?;
         }
         CliCommand::Playback { proto, path } => {
-            let protocol = parse_protocol(&proto).expect("Failed to parse protocol");
+            let protocol = proto.as_str().try_into().map_err(|_| anyhow::Error::msg("Unknown protocol"))?;
+
             let cmds = playback::command(protocol, &path)?;
 
             for cmd in cmds {
                 println!("{:?}", cmd);
             }
-
-            Ok(())
         }
         CliCommand::Protocol { .. } => {
             log::warn!("Protocol is not implemented");
-            Ok(())
         }
         CliCommand::Transmit { proto, addr, cmd } => {
             link.connect(&path_serialport)?;
 
-            let protocol = parse_protocol(&proto).expect("Failed to parse protocol");
+            let protocol = proto.as_str().try_into().map_err(|_| anyhow::Error::msg("Unknown protocol"))?;
 
-            irsend::transmit(&mut link, protocol, addr, cmd)
+            irsend::transmit(&mut link, protocol, addr, cmd)?;
         }
-    }
+        CliCommand::Listserialports => {
+            let ports = SerialLink::list_ports()?;
+            for p in &ports {
+                println!("{:?}", p);
+            }
+        }
+    };
+    Ok(())
 }
 
 fn select_serialport(opt: Option<PathBuf>, def: &str) -> PathBuf {
@@ -92,8 +105,7 @@ fn select_serialport(opt: Option<PathBuf>, def: &str) -> PathBuf {
         return path;
     }
 
-    // Use the first one available
-    serialport::available_ports()
+    SerialLink::list_ports()
         .ok()
         .and_then(|ports| {
             ports
@@ -104,15 +116,3 @@ fn select_serialport(opt: Option<PathBuf>, def: &str) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(def))
 }
 
-fn parse_protocol(s: &str) -> Option<ProtocolId> {
-    match s {
-        "nec" => Some(ProtocolId::Nec),
-        "n16" => Some(ProtocolId::Nec16),
-        "nes" => Some(ProtocolId::NecSamsung),
-        "apple" => Some(ProtocolId::NecApple),
-        "rc5" => Some(ProtocolId::Rc5),
-        "rc6" => Some(ProtocolId::Rc6),
-        "sbp" => Some(ProtocolId::Sbp),
-        _ => None,
-    }
-}
