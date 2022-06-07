@@ -29,7 +29,7 @@ pub fn setup(
     }
 
     // Set device in capture mode
-    link.send_command(Command::Capture(samplerate))?;
+    link.send_command(Command::Capture)?;
     link.reply_ok()?;
 
     loop {

@@ -1,6 +1,5 @@
-use std::convert::TryFrom;
-
 use infrared::ProtocolId;
+use infrared;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -8,8 +7,8 @@ pub enum Command {
     Idle,
     Info,
     CaptureProtocol(u32),
-    /// Start a capture at samplerate
-    Capture(u32),
+    /// Start a capture
+    Capture,
     RemoteControlSend(RemoteControlCmd),
 }
 
@@ -46,6 +45,8 @@ pub struct Info {
     pub version: u32,
     /// Bitfield of transmitters
     pub transmitters: u32,
+    /// Samplerate
+    pub samplerate: u32,
 }
 
 /// Protocol Id
